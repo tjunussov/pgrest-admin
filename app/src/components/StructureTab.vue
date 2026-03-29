@@ -1,62 +1,67 @@
 <template lang="pug">
-.q-pa-sm(v-if="resource")
-  .text-subtitle2.q-mb-sm
-    q-icon(name="view_column" size="sm" class="q-mr-xs")
-    | Columns
-  q-table(
-    :rows="columns"
-    :columns="colDef"
-    dense flat bordered
-    row-key="column_name"
-    hide-pagination
-    :rows-per-page-options="[0]"
-  )
+div(v-if="resource")
+  q-tabs(v-model="tab" dense align="left" no-caps active-color="primary" indicator-color="primary" class="text-grey-5")
+    q-tab(name="columns" :label="`Columns (${columns.length})`" icon="view_column")
+    q-tab(name="indexes" :label="`Indexes (${indexes.length})`" icon="speed")
+    q-tab(name="triggers" :label="`Triggers (${triggers.length})`" icon="bolt")
+    q-tab(name="constraints" :label="`Constraints (${constraints.length})`" icon="link")
 
-  .text-subtitle2.q-mt-md.q-mb-sm
-    q-icon(name="speed" size="sm" class="q-mr-xs")
-    | Indexes
-  q-table(
-    :rows="indexes"
-    :columns="idxDef"
-    dense flat bordered
-    row-key="indexname"
-    hide-pagination
-    :rows-per-page-options="[0]"
-  )
-    template(v-slot:no-data)
-      .text-grey-6 No indexes found
+  q-separator
 
-  .text-subtitle2.q-mt-md.q-mb-sm
-    q-icon(name="bolt" size="sm" class="q-mr-xs")
-    | Triggers
-  q-table(
-    :rows="triggers"
-    :columns="trgDef"
-    dense flat bordered
-    row-key="trigger_name"
-    hide-pagination
-    :rows-per-page-options="[0]"
-  )
-    template(v-slot:no-data)
-      .text-grey-6 No triggers found
+  q-tab-panels(v-model="tab" animated class="bg-transparent")
+    q-tab-panel(name="columns" class="q-pa-none")
+      q-table(
+        :rows="columns"
+        :columns="colDef"
+        dense flat
+        separator="cell"
+        row-key="column_name"
+        hide-pagination
+        :rows-per-page-options="[0]"
+      )
 
-  .text-subtitle2.q-mt-md.q-mb-sm
-    q-icon(name="link" size="sm" class="q-mr-xs")
-    | Constraints
-  q-table(
-    :rows="constraints"
-    :columns="conDef"
-    dense flat bordered
-    row-key="constraint_name"
-    hide-pagination
-    :rows-per-page-options="[0]"
-  )
-    template(v-slot:no-data)
-      .text-grey-6 No constraints found
+    q-tab-panel(name="indexes" class="q-pa-none")
+      q-table(
+        :rows="indexes"
+        :columns="idxDef"
+        dense flat
+        separator="cell"
+        row-key="indexname"
+        hide-pagination
+        :rows-per-page-options="[0]"
+      )
+        template(v-slot:no-data)
+          .text-grey-6.q-pa-sm No indexes found
+
+    q-tab-panel(name="triggers" class="q-pa-none")
+      q-table(
+        :rows="triggers"
+        :columns="trgDef"
+        dense flat
+        separator="cell"
+        row-key="trigger_name"
+        hide-pagination
+        :rows-per-page-options="[0]"
+      )
+        template(v-slot:no-data)
+          .text-grey-6.q-pa-sm No triggers found
+
+    q-tab-panel(name="constraints" class="q-pa-none")
+      q-table(
+        :rows="constraints"
+        :columns="conDef"
+        dense flat
+        separator="cell"
+        row-key="constraint_name"
+        hide-pagination
+        :rows-per-page-options="[0]"
+      )
+        template(v-slot:no-data)
+          .text-grey-6.q-pa-sm No constraints found
 </template>
 
 <script>
-import { defineComponent, computed, watch } from 'vue'
+import { defineComponent, ref, computed, watch } from 'vue'
 import { useSchemaStore } from 'src/stores/schema'
 
 const colDef = [
@@ -91,6 +96,7 @@ export default defineComponent({
 
   setup () {
     const schema = useSchemaStore()
+    const tab = ref('columns')
     const resource = computed(() => schema.activeResource)
     const key = computed(() => resource.value ? `${resource.value.schema}.${resource.value.name}` : null)
 
@@ -111,15 +117,9 @@ export default defineComponent({
     }, { immediate: true })
 
     return {
-      resource,
-      columns,
-      indexes,
-      triggers,
-      constraints,
-      colDef,
-      idxDef,
-      trgDef,
-      conDef
+      resource, tab,
+      columns, indexes, triggers, constraints,
+      colDef, idxDef, trgDef, conDef
     }
   }
 })

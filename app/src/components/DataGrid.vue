@@ -63,9 +63,12 @@
             )
               | {{ f.column }} {{ f.op }} {{ f.value }}
 
-      template(v-slot:header-selection)
-        q-btn(flat dense round icon="add" size="xs" color="positive" @click="openCreate")
-          q-tooltip Insert row
+      template(v-slot:header="props")
+        q-tr(:props="props")
+          q-th(auto-width)
+            q-btn(flat dense round icon="add" size="xs" color="positive" @click="openCreate")
+              q-tooltip Insert row
+          q-th(v-for="col in props.cols" :key="col.name" :props="props") {{ col.label }}
 
       template(v-slot:body="props")
         q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.selected }")

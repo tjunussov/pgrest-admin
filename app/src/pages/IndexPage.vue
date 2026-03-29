@@ -1,5 +1,5 @@
 <template lang="pug">
-q-page.q-pa-none.column.full-height
+q-page.q-pa-none.column(:style-fn="pageFn")
   //- Tabs bar
   .row.items-center.bg-dark.q-px-xs(style="min-height: 34px; flex-shrink: 0" v-if="schema.tabs.length")
     q-tabs(
@@ -22,15 +22,16 @@ q-page.q-pa-none.column.full-height
   q-separator(v-if="schema.tabs.length")
 
   //- Tab content (v-show for keep-alive)
-  .col.relative-position
+  .col.column
     template(v-for="tab in schema.tabs" :key="tab.id")
-      data-grid.fit(v-if="tab.type === 'data'" v-show="tab.id === schema.activeTabId")
-      sql-lab.fit(v-if="tab.type === 'sql'" v-show="tab.id === schema.activeTabId" :tab="tab")
+      data-grid.col(v-if="tab.type === 'data'" v-show="tab.id === schema.activeTabId")
+      sql-lab.col(v-if="tab.type === 'sql'" v-show="tab.id === schema.activeTabId" :tab="tab")
 
-    .text-center.q-pa-xl.text-grey-7(v-if="!schema.tabs.length")
-      q-icon(name="table_chart" size="64px")
-      .text-h6.q-mt-md Select a table or press +
-      .text-caption Open a resource from the tree or start a SQL session
+    .col.flex.flex-center.text-grey-7(v-if="!schema.tabs.length")
+      .text-center
+        q-icon(name="table_chart" size="64px")
+        .text-h6.q-mt-md Select a table or press +
+        .text-caption Open a resource from the tree or start a SQL session
 </template>
 
 <script>
@@ -44,7 +45,12 @@ export default defineComponent({
   components: { DataGrid, SqlLab },
   setup () {
     const schema = useSchemaStore()
-    return { schema }
+
+    function pageFn (offset) {
+      return { minHeight: offset ? `calc(100vh - ${offset}px)` : '100vh' }
+    }
+
+    return { schema, pageFn }
   }
 })
 </script>

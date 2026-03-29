@@ -10,7 +10,7 @@ q-layout(view="hHh lpR fFf")
   )
     .drawer-resize-handle(@mousedown="startResize")
     q-scroll-area.fit
-      .q-pa-sm
+      .column.q-pa-sm(style="min-height: 100%")
         //- Connection section
         .row.items-center.q-mb-sm
           q-btn-dropdown.full-width(
@@ -40,10 +40,11 @@ q-layout(view="hHh lpR fFf")
         q-separator.q-mb-sm
 
         //- Resource tree
-        resource-tree(v-if="conn.active" @select="onResourceSelect" @select-new="onResourceSelectNew")
+        .col
+          resource-tree(v-if="conn.active" @select="onResourceSelect" @select-new="onResourceSelectNew")
 
-        //- Version footer
-        .text-caption.text-grey-7.q-mt-md PgRestAdmin v{{ version }}
+        //- Version footer (pushed to bottom)
+        .text-caption.text-grey-7.text-center.q-mt-md PgRestAdmin v{{ version }}
 
   q-page-container
     router-view

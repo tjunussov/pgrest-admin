@@ -57,7 +57,7 @@ Environment variables in `.env`:
 
 | Variable | Description | Default |
 |---|---|---|
-| `VITE_DEFAULT_API_URL` | Default PostgREST URL pre-filled in login | `https://pos.imbir.kz/api` |
+| `VITE_DEFAULT_API_URL` | Default PostgREST URL pre-filled in login | `https://pos.imbir.kz/rest` |
 | `VITE_DEFAULT_API_NAME` | Display name for the default connection | `SmartPOS` |
 
 ## Development

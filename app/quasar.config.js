@@ -16,7 +16,7 @@ module.exports = configure(function () {
       },
       vueRouterMode: 'history',
       env: {
-        DEFAULT_API_URL: process.env.VITE_DEFAULT_API_URL || 'https://pos.imbir.kz/api',
+        DEFAULT_API_URL: process.env.VITE_DEFAULT_API_URL || 'https://pos.imbir.kz/rest',
         DEFAULT_API_NAME: process.env.VITE_DEFAULT_API_NAME || 'SmartPOS'
       }
     },

@@ -9,4 +9,4 @@ global.localStorage = {
 }
 
 // Base API URL for integration tests
-global.TEST_API_URL = process.env.TEST_API_URL || 'https://pos.imbir.kz/api'
+global.TEST_API_URL = process.env.TEST_API_URL || 'https://pos.imbir.kz/rest'

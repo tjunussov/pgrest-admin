@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import axios from 'axios'
 
-const API = process.env.TEST_API_URL || 'https://pos.imbir.kz/api'
+const API = process.env.TEST_API_URL || 'https://pos.imbir.kz/rest'
 
 describe('PostgREST API integration', () => {
   it('should reach the PostgREST root endpoint', async () => {

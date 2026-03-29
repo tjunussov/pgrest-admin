@@ -31,6 +31,10 @@ q-layout(view="hHh lpR fFf")
                   q-item-section(avatar)
                     q-icon(name="refresh" size="xs")
                   q-item-section Refresh
+                q-item(clickable v-close-popup @click="shareLink")
+                  q-item-section(avatar)
+                    q-icon(name="share" size="xs")
+                  q-item-section Share link
                 q-separator
                 q-item(clickable v-close-popup @click="onLogout")
                   q-item-section(avatar)
@@ -145,6 +149,19 @@ export default defineComponent({
       if (conn.active) schema.fetchSchemas()
     }
 
+    function shareLink () {
+      if (!conn.active) return
+      const base = window.location.origin + window.location.pathname
+      const params = new URLSearchParams({ url: conn.active.url })
+      if (conn.active.email) params.set('email', conn.active.email)
+      const link = `${base}?${params.toString()}`
+      navigator.clipboard.writeText(link).then(() => {
+        Notify.create({ type: 'positive', message: 'Connection link copied to clipboard' })
+      }).catch(() => {
+        Notify.create({ type: 'info', message: link })
+      })
+    }
+
     function onResourceSelect (resource) {
       schema.openResourceTab(resource, false)
     }
@@ -155,7 +172,7 @@ export default defineComponent({
 
     return {
       conn, schema, settings, showConnectionDialog,
-      startResize, onLogout, onRefresh, onResourceSelect, onResourceSelectNew,
+      startResize, onLogout, onRefresh, shareLink, onResourceSelect, onResourceSelectNew,
       version: pkg.version
     }
   }

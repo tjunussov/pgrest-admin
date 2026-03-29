@@ -23,37 +23,7 @@
             span.text-subtitle2 {{ resource?.name }}
             q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
             q-space
-            q-btn(icon="refresh" dense flat size="sm" @click="fetchData")
-            q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
-              q-tooltip Structure
-
-          //- Inline filters
-          .row.items-center.q-gutter-xs
-            q-select(
-              v-model="filterColumn"
-              :options="filterColumnOptions"
-              label="Column"
-              dense outlined
-              style="min-width: 130px; max-width: 160px"
-              emit-value map-options
-            )
-            q-select(
-              v-model="filterOp"
-              :options="operators"
-              dense outlined
-              style="min-width: 90px; max-width: 110px"
-              emit-value map-options
-            )
-            q-input(
-              v-model="filterValue"
-              dense outlined
-              placeholder="Value"
-              style="min-width: 140px; max-width: 200px"
-              @keyup.enter="addFilter"
-              :disable="filterOp === 'is.null' || filterOp === 'is.true' || filterOp === 'is.false'"
-            )
-            q-btn(icon="add" color="primary" dense flat size="sm" @click="addFilter")
-            q-btn(icon="clear_all" dense flat size="sm" @click="clearFilters" v-if="filters.length")
+            //- Active filter chips
             q-chip(
               v-for="(f, i) in filters"
               :key="i"
@@ -62,13 +32,45 @@
               @remove="removeFilter(i)"
             )
               | {{ f.column }} {{ f.op }} {{ f.value }}
+            q-btn(icon="clear_all" dense flat size="xs" @click="clearFilters" v-if="filters.length")
+            q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
+            q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
+              q-tooltip Structure
 
       template(v-slot:header="props")
         q-tr(:props="props")
           q-th(auto-width)
             q-btn(flat dense round icon="add" size="xs" color="positive" @click="openCreate")
               q-tooltip Insert row
-          q-th(v-for="col in props.cols" :key="col.name" :props="props") {{ col.label }}
+          q-th.col-header(v-for="col in props.cols" :key="col.name" :props="props")
+            | {{ col.label }}
+            q-icon.col-filter-icon(
+              name="filter_list"
+              size="12px"
+              :color="hasFilter(col.name) ? 'primary' : 'grey-7'"
+            )
+            //- Filter menu on column
+            q-menu(anchor="bottom left" self="top left")
+              q-card.bg-dark(style="min-width: 220px")
+                q-card-section.q-pa-sm
+                  .text-caption.text-grey-5.q-mb-xs Filter: {{ col.label }}
+                  q-select(
+                    v-model="colFilterOp[col.name]"
+                    :options="operators"
+                    dense outlined
+                    emit-value map-options
+                    class="q-mb-xs"
+                  )
+                  q-input(
+                    v-model="colFilterVal[col.name]"
+                    dense outlined
+                    placeholder="Value"
+                    @keyup.enter="addColumnFilter(col.name)"
+                    :disable="(colFilterOp[col.name] || 'eq').startsWith('is.')"
+                  )
+                q-card-actions(align="right" class="q-pa-xs")
+                  q-btn(flat dense no-caps label="Clear" size="sm" @click="clearColumnFilter(col.name)" v-close-popup)
+                  q-btn(flat dense no-caps label="Apply" size="sm" color="primary" @click="addColumnFilter(col.name)" v-close-popup)
 
       template(v-slot:body="props")
         q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.selected }")
@@ -163,9 +165,9 @@ export default defineComponent({
     const inlineForm = ref({})
     const editMode = ref('create')
 
-    const filterColumn = ref(null)
-    const filterOp = ref('eq')
-    const filterValue = ref('')
+    // Per-column filters
+    const colFilterOp = ref({})
+    const colFilterVal = ref({})
     const filters = ref([])
     const activeFilters = ref({})
 
@@ -189,9 +191,9 @@ export default defineComponent({
       })
     })
 
-    const filterColumnOptions = computed(() => {
-      return gridColumns.value.map(c => ({ label: c.column_name, value: c.column_name }))
-    })
+    function hasFilter (colName) {
+      return filters.value.some(f => f.column === colName)
+    }
 
     const tableColumns = computed(() => {
       return gridColumns.value.map(c => ({
@@ -368,18 +370,32 @@ export default defineComponent({
       fetchData()
     }
 
-    function addFilter () {
-      if (!filterColumn.value) return
-      if (!filterValue.value && !filterOp.value.startsWith('is.')) return
-      let val = filterValue.value
-      if (filterOp.value === 'ilike' || filterOp.value === 'like') val = `*${val}*`
-      filters.value.push({ column: filterColumn.value, op: filterOp.value, value: val })
+    function addColumnFilter (colName) {
+      const op = colFilterOp.value[colName] || 'eq'
+      const val = colFilterVal.value[colName] || ''
+      if (!val && !op.startsWith('is.')) return
+      // Remove existing filter for this column
+      filters.value = filters.value.filter(f => f.column !== colName)
+      let filterVal = val
+      if (op === 'ilike' || op === 'like') filterVal = `*${val}*`
+      filters.value.push({ column: colName, op, value: filterVal })
       applyFilters()
-      filterValue.value = ''
+    }
+
+    function clearColumnFilter (colName) {
+      filters.value = filters.value.filter(f => f.column !== colName)
+      delete colFilterOp.value[colName]
+      delete colFilterVal.value[colName]
+      applyFilters()
     }
 
     function removeFilter (i) { filters.value.splice(i, 1); applyFilters() }
-    function clearFilters () { filters.value = []; applyFilters() }
+    function clearFilters () {
+      filters.value = []
+      colFilterOp.value = {}
+      colFilterVal.value = {}
+      applyFilters()
+    }
     function applyFilters () {
       const params = {}
       filters.value.forEach(f => { params[f.column] = `${f.op}.${f.value}` })
@@ -425,11 +441,11 @@ export default defineComponent({
       gridColumns, tableColumns, editableColumns,
       showStructure,
       selected, inlineForm, editMode,
-      filterColumn, filterOp, filterValue, filters, filterColumnOptions,
+      colFilterOp, colFilterVal, filters,
       operators,
-      isJsonColumn, formatCell, isLongValue,
+      isJsonColumn, formatCell, isLongValue, hasFilter,
       fetchData, onRequest, openCreate, clearSelection, saveInline,
-      addFilter, removeFilter, clearFilters, confirmDelete
+      addColumnFilter, clearColumnFilter, removeFilter, clearFilters, confirmDelete
     }
   }
 })
@@ -439,6 +455,18 @@ export default defineComponent({
 .datagrid-table {
   table-layout: fixed;
   width: 100%;
+}
+.col-filter-icon {
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 2px;
+  cursor: pointer;
+}
+.col-header:hover .col-filter-icon {
+  opacity: 1;
+}
+.col-filter-icon.text-primary {
+  opacity: 1;
 }
 .cell-truncate {
   overflow: hidden;

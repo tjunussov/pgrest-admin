@@ -1,52 +1,5 @@
 <template lang="pug">
 q-layout(view="hHh lpR fFf")
-  q-header.bg-dark
-    q-toolbar.q-px-sm(style="min-height: 40px")
-      //- Drawer toggle
-      q-btn(flat dense round :icon="settings.drawerCollapsed ? 'chevron_right' : 'chevron_left'" size="sm" @click="settings.toggleDrawer")
-        q-tooltip {{ settings.drawerCollapsed ? 'Show explorer' : 'Hide explorer' }}
-
-      //- Logo with connection dropdown
-      q-btn-dropdown(flat no-caps dense size="sm" menu-anchor="bottom left" menu-self="top left")
-        template(v-slot:label)
-          q-icon(name="storage" size="xs" class="q-mr-xs")
-          span.text-caption {{ conn.active ? conn.active.name : 'PgRestAdmin' }}
-        q-list(dense style="min-width: 180px")
-          q-item(clickable v-close-popup @click="showConnectionDialog = true")
-            q-item-section(avatar)
-              q-icon(name="link" size="xs")
-            q-item-section Connect
-          template(v-if="conn.active")
-            q-item(clickable v-close-popup @click="onRefresh")
-              q-item-section(avatar)
-                q-icon(name="refresh" size="xs")
-              q-item-section Refresh
-            q-separator
-            q-item(clickable v-close-popup @click="onLogout")
-              q-item-section(avatar)
-                q-icon(name="logout" size="xs")
-              q-item-section Disconnect
-
-      q-separator.q-mx-xs(vertical inset)
-
-      //- Session tabs (left-aligned)
-      q-tabs(
-        :model-value="schema.activeTabId"
-        @update:model-value="schema.activateTab"
-        dense shrink no-caps
-        active-color="white"
-        indicator-color="primary"
-        class="text-grey-6"
-      )
-        q-tab(v-for="tab in schema.tabs" :key="tab.id" :name="tab.id" no-caps)
-          .row.items-center.no-wrap
-            q-icon(:name="tab.type === 'sql' ? 'code' : 'table_chart'" size="14px" class="q-mr-xs")
-            span.text-caption {{ tab.label }}
-            q-btn.q-ml-xs(flat round dense icon="close" size="8px" @click.stop="schema.closeTab(tab.id)")
-
-      q-btn(flat dense round icon="add" size="sm" @click="addTab")
-        q-tooltip New tab
-
   q-drawer(
     :model-value="!settings.drawerCollapsed"
     side="left"
@@ -55,13 +8,42 @@ q-layout(view="hHh lpR fFf")
     :breakpoint="0"
     bordered
   )
-    //- Resize handle
     .drawer-resize-handle(@mousedown="startResize")
     q-scroll-area.fit
       .q-pa-sm
+        //- Connection section
+        .row.items-center.q-mb-sm
+          q-btn-dropdown.full-width(
+            flat no-caps dense
+            :label="conn.active ? conn.active.name : 'Connect...'"
+            :icon="conn.active ? 'cloud_done' : 'cloud_off'"
+            :color="conn.active ? 'positive' : 'grey'"
+            menu-anchor="bottom left"
+            menu-self="top left"
+          )
+            q-list(dense style="min-width: 200px")
+              q-item(clickable v-close-popup @click="showConnectionDialog = true")
+                q-item-section(avatar)
+                  q-icon(name="link" size="xs")
+                q-item-section Connect
+              template(v-if="conn.active")
+                q-item(clickable v-close-popup @click="onRefresh")
+                  q-item-section(avatar)
+                    q-icon(name="refresh" size="xs")
+                  q-item-section Refresh
+                q-separator
+                q-item(clickable v-close-popup @click="onLogout")
+                  q-item-section(avatar)
+                    q-icon(name="logout" size="xs")
+                  q-item-section Disconnect
+
+        q-separator.q-mb-sm
+
+        //- Resource tree
         resource-tree(v-if="conn.active" @select="onResourceSelect")
-        .text-caption.text-grey-6.q-mt-md
-          | PgRestAdmin v{{ version }}
+
+        //- Version footer
+        .text-caption.text-grey-7.q-mt-md PgRestAdmin v{{ version }}
 
   q-page-container
     router-view
@@ -88,7 +70,6 @@ export default defineComponent({
     const settings = useSettingsStore()
     const showConnectionDialog = ref(false)
 
-    // Drawer resize
     let resizing = false
     function startResize (e) {
       resizing = true
@@ -105,7 +86,6 @@ export default defineComponent({
       document.removeEventListener('mousemove', onResize)
       document.removeEventListener('mouseup', stopResize)
     }
-
     onBeforeUnmount(() => {
       document.removeEventListener('mousemove', onResize)
       document.removeEventListener('mouseup', stopResize)
@@ -133,20 +113,9 @@ export default defineComponent({
       schema.openResourceTab(resource)
     }
 
-    function addTab () {
-      schema.openSqlTab()
-    }
-
     return {
-      conn,
-      schema,
-      settings,
-      showConnectionDialog,
-      startResize,
-      onLogout,
-      onRefresh,
-      onResourceSelect,
-      addTab,
+      conn, schema, settings, showConnectionDialog,
+      startResize, onLogout, onRefresh, onResourceSelect,
       version: pkg.version
     }
   }
@@ -162,9 +131,6 @@ export default defineComponent({
   height: 100%;
   cursor: col-resize;
   z-index: 1;
-
-  &:hover {
-    background: rgba(25, 118, 210, 0.4);
-  }
+  &:hover { background: rgba(25, 118, 210, 0.4); }
 }
 </style>

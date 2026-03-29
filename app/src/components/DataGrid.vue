@@ -123,7 +123,7 @@
 </template>
 
 <script>
-import { defineComponent, ref, computed, watch } from 'vue'
+import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useSchemaStore } from 'src/stores/schema'
 import { useConnectionStore } from 'src/stores/connection'
 import { api } from 'src/boot/axios'
@@ -217,6 +217,35 @@ export default defineComponent({
       return String(value)
     }
 
+    // Keyboard navigation
+    function onKeyDown (e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const currentIdx = selected.value.length ? selected.value[0].__rowIndex : -1
+        let nextIdx
+        if (e.key === 'ArrowDown') {
+          nextIdx = currentIdx < rows.value.length - 1 ? currentIdx + 1 : currentIdx
+        } else {
+          nextIdx = currentIdx > 0 ? currentIdx - 1 : 0
+        }
+        const nextRow = rows.value.find(r => r.__rowIndex === nextIdx)
+        if (nextRow) selected.value = [nextRow]
+      }
+      if (e.key === 'Enter' && selected.value.length) {
+        openEdit()
+      }
+    }
+
+    onMounted(() => document.addEventListener('keydown', onKeyDown))
+    onBeforeUnmount(() => document.removeEventListener('keydown', onKeyDown))
+
+    function selectFirstRow () {
+      if (rows.value.length) {
+        selected.value = [rows.value[0]]
+      }
+    }
+
     function openCreate () {
       crudMode.value = 'create'
       editingRow.value = null
@@ -257,6 +286,7 @@ export default defineComponent({
             pagination.value.rowsNumber = totalCount.value
           }
         }
+        selectFirstRow()
       } catch (err) {
         console.error('Fetch error:', err)
         rows.value = []

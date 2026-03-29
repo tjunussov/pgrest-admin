@@ -28,7 +28,7 @@ div.resource-tree
     @update:selected="onNodeSelect"
   )
     template(v-slot:default-header="prop")
-      .row.items-center.no-wrap
+      .row.items-center.no-wrap(@dblclick.stop="onNodeDblClick(prop.node.id)")
         q-icon(:name="prop.node.icon" :color="prop.node.iconColor || 'grey-6'" size="xs" class="q-mr-xs")
         span.text-caption {{ prop.node.label }}
         q-badge(v-if="prop.node.badge" :label="prop.node.badge" color="grey-8" class="q-ml-xs" dense)
@@ -40,7 +40,7 @@ import { useSchemaStore } from 'src/stores/schema'
 
 export default defineComponent({
   name: 'ResourceTree',
-  emits: ['select'],
+  emits: ['select', 'select-new'],
 
   setup (props, { emit }) {
     const schema = useSchemaStore()
@@ -210,15 +210,25 @@ export default defineComponent({
       }
     }
 
-    function onNodeSelect (id) {
-      selectedId.value = id
-      if (!id) return
-
+    function parseResourceId (id) {
+      if (!id) return null
       if (id.startsWith('table:') || id.startsWith('view:')) {
         const type = id.startsWith('table:') ? 'table' : 'view'
         const [schemaName, name] = id.replace(/^(table|view):/, '').split('.')
-        emit('select', { type, schema: schemaName, name })
+        return { type, schema: schemaName, name }
       }
+      return null
+    }
+
+    function onNodeSelect (id) {
+      selectedId.value = id
+      const resource = parseResourceId(id)
+      if (resource) emit('select', resource)
+    }
+
+    function onNodeDblClick (id) {
+      const resource = parseResourceId(id)
+      if (resource) emit('select-new', resource)
     }
 
     // Sync tree selection when active tab changes
@@ -260,7 +270,8 @@ export default defineComponent({
       treeRef,
       treeNodes,
       onLazyLoad,
-      onNodeSelect
+      onNodeSelect,
+      onNodeDblClick
     }
   }
 })

@@ -40,7 +40,7 @@ q-layout(view="hHh lpR fFf")
         q-separator.q-mb-sm
 
         //- Resource tree
-        resource-tree(v-if="conn.active" @select="onResourceSelect")
+        resource-tree(v-if="conn.active" @select="onResourceSelect" @select-new="onResourceSelectNew")
 
         //- Version footer
         .text-caption.text-grey-7.q-mt-md PgRestAdmin v{{ version }}
@@ -110,12 +110,16 @@ export default defineComponent({
     }
 
     function onResourceSelect (resource) {
-      schema.openResourceTab(resource)
+      schema.openResourceTab(resource, false)
+    }
+
+    function onResourceSelectNew (resource) {
+      schema.openResourceTab(resource, true)
     }
 
     return {
       conn, schema, settings, showConnectionDialog,
-      startResize, onLogout, onRefresh, onResourceSelect,
+      startResize, onLogout, onRefresh, onResourceSelect, onResourceSelectNew,
       version: pkg.version
     }
   }

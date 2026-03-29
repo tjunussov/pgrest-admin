@@ -171,21 +171,46 @@ export const useSchemaStore = defineStore('schema', {
       this.functions = rows || []
     },
 
-    openResourceTab (resource) {
+    openResourceTab (resource, forceNew = false) {
       const id = `${resource.type}:${resource.schema}.${resource.name}`
-      const existing = this.tabs.find(t => t.id === id)
+
+      if (!forceNew) {
+        // Single click: reuse active data tab or find existing
+        const existing = this.tabs.find(t => t.id === id)
+        if (existing) {
+          this.activeTabId = id
+          this.activeResource = resource
+          return
+        }
+        // Reuse the current active data tab if it's a data tab
+        const activeTab = this.tabs.find(t => t.id === this.activeTabId)
+        if (activeTab && activeTab.type === 'data') {
+          activeTab.id = id
+          activeTab.schema = resource.schema
+          activeTab.name = resource.name
+          activeTab.resourceType = resource.type
+          activeTab.label = resource.name
+          this.activeTabId = id
+          this.activeResource = resource
+          return
+        }
+      }
+
+      // Double click or no existing data tab: create new tab
+      const newId = forceNew ? `${id}_${Date.now()}` : id
+      const existing = this.tabs.find(t => t.id === newId)
       if (existing) {
-        this.activeTabId = id
+        this.activeTabId = newId
       } else {
         this.tabs.push({
-          id,
+          id: newId,
           type: 'data',
           schema: resource.schema,
           name: resource.name,
           resourceType: resource.type,
           label: resource.name
         })
-        this.activeTabId = id
+        this.activeTabId = newId
       }
       this.activeResource = resource
     },

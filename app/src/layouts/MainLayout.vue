@@ -1,45 +1,58 @@
 <template lang="pug">
 q-layout(view="hHh lpR fFf")
   q-header.bg-dark(bordered)
-    q-toolbar
-      q-btn(flat dense round icon="menu" @click="drawer = !drawer")
-      q-toolbar-title.text-subtitle1
-        q-icon(name="storage" size="sm" class="q-mr-sm")
-        | PgRestAdmin
-      q-space
-      template(v-if="conn.active")
-        q-chip(dense color="positive" text-color="white" icon="cloud_done" size="sm")
-          | {{ conn.active.name }}
-        q-btn(flat dense round icon="logout" @click="onLogout" size="sm")
-          q-tooltip Disconnect
-      q-btn(flat dense round icon="link" @click="showConnectionDialog = true")
-        q-tooltip Connections
-      q-btn(flat dense round icon="refresh" @click="onRefresh")
-        q-tooltip Refresh
+    q-toolbar.q-px-sm(style="min-height: 40px")
+      //- Logo with connection dropdown
+      q-btn-dropdown(flat no-caps dense size="sm" menu-anchor="bottom left" menu-self="top left")
+        template(v-slot:label)
+          q-icon(name="storage" size="xs" class="q-mr-xs")
+          span.text-caption {{ conn.active ? conn.active.name : 'PgRestAdmin' }}
+        q-list(dense style="min-width: 180px")
+          q-item(clickable v-close-popup @click="showConnectionDialog = true")
+            q-item-section(avatar)
+              q-icon(name="link" size="xs")
+            q-item-section Connect
+          template(v-if="conn.active")
+            q-separator
+            q-item(clickable v-close-popup @click="onLogout")
+              q-item-section(avatar)
+                q-icon(name="logout" size="xs")
+              q-item-section Disconnect
 
-  q-drawer(v-model="drawer" side="left" bordered :width="280" class="bg-dark")
+      q-separator.q-mx-xs(vertical inset)
+
+      //- Session tabs
+      q-tabs(
+        :model-value="schema.activeTabId"
+        @update:model-value="schema.activateTab"
+        dense shrink no-caps
+        active-color="white"
+        indicator-color="primary"
+        class="text-grey-6"
+        style="flex: 1; min-width: 0"
+      )
+        q-tab(v-for="tab in schema.tabs" :key="tab.id" :name="tab.id" no-caps)
+          .row.items-center.no-wrap
+            q-icon(:name="tab.type === 'sql' ? 'code' : 'table_chart'" size="14px" class="q-mr-xs")
+            span.text-caption {{ tab.label }}
+            q-btn.q-ml-xs(flat round dense icon="close" size="8px" @click.stop="schema.closeTab(tab.id)")
+
+      q-btn(flat dense round icon="add" size="sm" @click="addTab")
+        q-tooltip New tab
+
+      q-space
+
+      q-btn(flat dense round icon="refresh" size="sm" @click="onRefresh" v-if="conn.active")
+
+  q-drawer(:model-value="true" side="left" bordered :width="260" class="bg-dark" :breakpoint="0")
     q-scroll-area.fit
       .q-pa-sm
-        .text-caption.text-grey-6.q-mb-xs EXPLORER
-        resource-tree(
-          v-if="conn.active"
-          @select="onResourceSelect"
-        )
-        .text-center.q-pa-lg.text-grey-7(v-else)
-          q-icon(name="link_off" size="xl")
-          .q-mt-sm Not connected
-          q-btn(
-            flat dense no-caps
-            label="Connect"
-            color="primary"
-            @click="showConnectionDialog = true"
-          )
+        resource-tree(v-if="conn.active" @select="onResourceSelect")
+        .text-caption.text-grey-6.q-mt-md
+          | PgRestAdmin v{{ version }}
 
   q-page-container
     router-view
-
-  q-footer.footer-bar.bg-dark(bordered)
-    app-footer
 
   connection-dialog(v-model="showConnectionDialog")
 </template>
@@ -50,16 +63,15 @@ import { useConnectionStore } from 'src/stores/connection'
 import { useSchemaStore } from 'src/stores/schema'
 import ConnectionDialog from 'src/components/ConnectionDialog.vue'
 import ResourceTree from 'src/components/ResourceTree.vue'
-import AppFooter from 'src/components/AppFooter.vue'
+import pkg from 'app/package.json'
 
 export default defineComponent({
   name: 'MainLayout',
-  components: { ConnectionDialog, ResourceTree, AppFooter },
+  components: { ConnectionDialog, ResourceTree },
 
   setup () {
     const conn = useConnectionStore()
     const schema = useSchemaStore()
-    const drawer = ref(true)
     const showConnectionDialog = ref(false)
 
     onMounted(() => {
@@ -77,23 +89,26 @@ export default defineComponent({
     }
 
     function onRefresh () {
-      if (conn.active) {
-        schema.fetchSchemas()
-      }
+      if (conn.active) schema.fetchSchemas()
     }
 
     function onResourceSelect (resource) {
-      schema.setActiveResource(resource)
+      schema.openResourceTab(resource)
+    }
+
+    function addTab () {
+      schema.openSqlTab()
     }
 
     return {
       conn,
       schema,
-      drawer,
       showConnectionDialog,
       onLogout,
       onRefresh,
-      onResourceSelect
+      onResourceSelect,
+      addTab,
+      version: pkg.version
     }
   }
 })

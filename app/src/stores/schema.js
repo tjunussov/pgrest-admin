@@ -15,7 +15,9 @@ export const useSchemaStore = defineStore('schema', {
     functions: [],
     loading: false,
     activeResource: null,
-    activeTab: 'data'
+    tabs: [],
+    activeTabId: null,
+    sqlCounter: 0
   }),
 
   getters: {
@@ -169,12 +171,61 @@ export const useSchemaStore = defineStore('schema', {
       this.functions = rows || []
     },
 
-    setActiveResource (resource) {
+    openResourceTab (resource) {
+      const id = `${resource.type}:${resource.schema}.${resource.name}`
+      const existing = this.tabs.find(t => t.id === id)
+      if (existing) {
+        this.activeTabId = id
+      } else {
+        this.tabs.push({
+          id,
+          type: 'data',
+          schema: resource.schema,
+          name: resource.name,
+          resourceType: resource.type,
+          label: resource.name
+        })
+        this.activeTabId = id
+      }
       this.activeResource = resource
     },
 
-    setActiveTab (tab) {
-      this.activeTab = tab
+    openSqlTab () {
+      this.sqlCounter++
+      const id = `sql:${this.sqlCounter}`
+      this.tabs.push({ id, type: 'sql', label: `SQL ${this.sqlCounter}`, query: '' })
+      this.activeTabId = id
+      this.activeResource = null
+    },
+
+    activateTab (id) {
+      const tab = this.tabs.find(t => t.id === id)
+      if (!tab) return
+      this.activeTabId = id
+      if (tab.type === 'data') {
+        this.activeResource = { type: tab.resourceType, schema: tab.schema, name: tab.name }
+      } else {
+        this.activeResource = null
+      }
+    },
+
+    closeTab (id) {
+      const idx = this.tabs.findIndex(t => t.id === id)
+      if (idx < 0) return
+      this.tabs.splice(idx, 1)
+      if (this.activeTabId === id) {
+        const next = this.tabs[Math.min(idx, this.tabs.length - 1)]
+        if (next) {
+          this.activateTab(next.id)
+        } else {
+          this.activeTabId = null
+          this.activeResource = null
+        }
+      }
+    },
+
+    getActiveTab () {
+      return this.tabs.find(t => t.id === this.activeTabId) || null
     },
 
     getPrimaryKeys (schema, table) {
@@ -193,6 +244,8 @@ export const useSchemaStore = defineStore('schema', {
       this.views = {}
       this.functions = []
       this.activeResource = null
+      this.tabs = []
+      this.activeTabId = null
     }
   }
 })

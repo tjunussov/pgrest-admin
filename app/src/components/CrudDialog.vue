@@ -1,6 +1,6 @@
 <template lang="pug">
 q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)")
-  q-card(style="min-width: 500px" class="bg-dark")
+  q-card(style="min-width: 550px; max-width: 90vw" class="bg-dark")
     q-card-section.row.items-center
       q-icon(:name="mode === 'create' ? 'add' : 'edit'" size="sm" class="q-mr-sm" color="primary")
       .text-h6 {{ mode === 'create' ? 'Insert Row' : 'Edit Row' }}
@@ -9,10 +9,21 @@ q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue
 
     q-separator
 
-    q-card-section
+    q-card-section(style="max-height: 70vh; overflow-y: auto")
       q-form(@submit.prevent="onSave" class="q-gutter-sm")
         template(v-for="col in editableColumns" :key="col.column_name")
+          //- JSON/JSONB fields — code editor
+          template(v-if="isJsonColumn(col)")
+            .text-caption.text-grey-5.q-mb-xs {{ col.column_name }} ({{ col.data_type }}){{ col.is_pk ? ' PK' : '' }}
+            textarea.sql-editor(
+              :value="formData[col.column_name]"
+              @input="formData[col.column_name] = $event.target.value"
+              :disabled="mode === 'edit' && col.is_pk"
+              style="min-height: 120px"
+            )
+          //- Regular fields
           q-input(
+            v-else
             v-model="formData[col.column_name]"
             :label="`${col.column_name} (${col.data_type})${col.is_pk ? ' PK' : ''}`"
             dense outlined
@@ -38,6 +49,8 @@ import { useSchemaStore } from 'src/stores/schema'
 import { api } from 'src/boot/axios'
 import { Notify } from 'quasar'
 
+const JSON_TYPES = ['json', 'jsonb', 'ARRAY', 'USER-DEFINED']
+
 export default defineComponent({
   name: 'CrudDialog',
   props: {
@@ -62,13 +75,33 @@ export default defineComponent({
       })
     })
 
+    function isJsonColumn (col) {
+      return JSON_TYPES.includes(col.data_type)
+    }
+
+    function stringify (val) {
+      if (val === null || val === undefined) return ''
+      if (typeof val === 'object') return JSON.stringify(val, null, 2)
+      return String(val)
+    }
+
+    function parseJsonField (val, col) {
+      if (!isJsonColumn(col)) return val
+      if (typeof val === 'string') {
+        try { return JSON.parse(val) } catch { return val }
+      }
+      return val
+    }
+
     watch(() => props.modelValue, (val) => {
       if (val) {
+        formData.value = {}
         if (props.mode === 'edit' && props.row) {
-          formData.value = { ...props.row }
-          delete formData.value.__rowIndex
+          editableColumns.value.forEach(c => {
+            const v = props.row[c.column_name]
+            formData.value[c.column_name] = isJsonColumn(c) ? stringify(v) : v
+          })
         } else {
-          formData.value = {}
           editableColumns.value.forEach(c => {
             formData.value[c.column_name] = null
           })
@@ -86,31 +119,22 @@ export default defineComponent({
         editableColumns.value.forEach(c => {
           const val = formData.value[c.column_name]
           if (val !== null && val !== '' && val !== undefined) {
-            payload[c.column_name] = val
+            payload[c.column_name] = parseJsonField(val, c)
           }
         })
 
         if (props.mode === 'create') {
           await api.post(`${conn.baseUrl}/${name}`, payload, {
-            headers: {
-              ...conn.apiHeaders,
-              Prefer: 'return=representation'
-            }
+            headers: { ...conn.apiHeaders, Prefer: 'return=representation' }
           })
           Notify.create({ type: 'positive', message: 'Row inserted' })
         } else {
           const pks = schema.getPrimaryKeys(props.resource.schema, name)
           const params = {}
-          pks.forEach(pk => {
-            params[pk] = `eq.${props.row[pk]}`
-          })
-
+          pks.forEach(pk => { params[pk] = `eq.${props.row[pk]}` })
           await api.patch(`${conn.baseUrl}/${name}`, payload, {
             params,
-            headers: {
-              ...conn.apiHeaders,
-              Prefer: 'return=representation'
-            }
+            headers: { ...conn.apiHeaders, Prefer: 'return=representation' }
           })
           Notify.create({ type: 'positive', message: 'Row updated' })
         }
@@ -124,12 +148,7 @@ export default defineComponent({
       }
     }
 
-    return {
-      formData,
-      saving,
-      editableColumns,
-      onSave
-    }
+    return { formData, saving, editableColumns, isJsonColumn, onSave }
   }
 })
 </script>

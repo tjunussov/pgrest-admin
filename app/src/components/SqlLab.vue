@@ -1,5 +1,5 @@
 <template lang="pug">
-div
+.q-pa-sm
   .row.q-gutter-sm.items-end.q-mb-sm
     .col
       textarea.sql-editor(
@@ -15,8 +15,7 @@ div
         color="positive"
         :loading="loading"
         @click="executeQuery"
-        no-caps
-        dense
+        no-caps dense
       )
       .text-caption.text-grey-6.q-mt-xs Ctrl+Enter
 
@@ -26,7 +25,7 @@ div
     | {{ error }}
 
   .text-caption.text-grey-6.q-mb-xs(v-if="resultTime !== null")
-    | {{ resultRows.length }} rows returned in {{ resultTime }}ms
+    | {{ resultRows.length }} rows in {{ resultTime }}ms
 
   q-table(
     v-if="resultRows.length"
@@ -40,20 +39,28 @@ div
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, watch } from 'vue'
 import { useSchemaStore } from 'src/stores/schema'
 
 export default defineComponent({
   name: 'SqlLab',
+  props: {
+    tab: { type: Object, default: null }
+  },
 
-  setup () {
+  setup (props) {
     const schema = useSchemaStore()
-    const query = ref('SELECT 1 as test;')
+    const query = ref(props.tab?.query || 'SELECT 1 as test;')
     const loading = ref(false)
     const error = ref(null)
     const resultRows = ref([])
     const resultColumns = ref([])
     const resultTime = ref(null)
+
+    // Persist query back to tab
+    watch(query, (val) => {
+      if (props.tab) props.tab.query = val
+    })
 
     async function executeQuery () {
       if (!query.value.trim()) return
@@ -73,7 +80,7 @@ export default defineComponent({
         }
 
         const rows = Array.isArray(data) ? data : []
-        if (rows.length === 0) {
+        if (!rows.length) {
           resultRows.value = []
           resultColumns.value = []
           return
@@ -81,13 +88,9 @@ export default defineComponent({
 
         const keys = Object.keys(rows[0])
         resultColumns.value = keys.map(k => ({
-          name: k,
-          label: k,
-          field: k,
-          align: 'left',
-          sortable: true
+          name: k, label: k, field: k, align: 'left', sortable: true,
+          format: v => typeof v === 'object' && v !== null ? JSON.stringify(v) : v
         }))
-
         resultRows.value = rows.map((r, i) => ({ ...r, __idx: i }))
       } catch (err) {
         error.value = err.response?.data?.message || err.message
@@ -97,15 +100,7 @@ export default defineComponent({
       }
     }
 
-    return {
-      query,
-      loading,
-      error,
-      resultRows,
-      resultColumns,
-      resultTime,
-      executeQuery
-    }
+    return { query, loading, error, resultRows, resultColumns, resultTime, executeQuery }
   }
 })
 </script>

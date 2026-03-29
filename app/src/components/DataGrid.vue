@@ -1,11 +1,5 @@
 <template lang="pug">
 .data-grid
-  filter-bar(
-    :columns="gridColumns"
-    @filter="onFilter"
-    ref="filterBar"
-  )
-
   q-table(
     :rows="rows"
     :columns="tableColumns"
@@ -15,17 +9,57 @@
     :pagination="pagination"
     @request="onRequest"
     :rows-per-page-options="[25, 50, 100, 250]"
-    class="q-mt-sm"
   )
-    template(v-slot:top-left)
-      .row.items-center.q-gutter-sm
-        q-icon(name="table_chart" color="primary" size="sm")
-        span.text-subtitle2 {{ resource?.name }}
-        q-badge(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
+    template(v-slot:top)
+      .full-width
+        .row.items-center.q-mb-xs
+          q-icon(name="table_chart" color="primary" size="sm" class="q-mr-xs")
+          span.text-subtitle2 {{ resource?.name }}
+          q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
+          q-space
+          q-btn(icon="add" label="Insert" color="positive" dense no-caps flat size="sm" @click="openCreate")
+          q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
+          q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
+            q-tooltip Structure
 
-    template(v-slot:top-right)
-      q-btn(icon="add" label="Insert" color="positive" dense no-caps flat @click="openCreate")
-      q-btn(icon="refresh" dense flat @click="fetchData" class="q-ml-sm")
+        //- Inline filters
+        .row.items-center.q-gutter-xs
+          q-select(
+            v-model="filterColumn"
+            :options="filterColumnOptions"
+            label="Column"
+            dense outlined
+            style="min-width: 130px; max-width: 160px"
+            emit-value map-options
+            size="sm"
+          )
+          q-select(
+            v-model="filterOp"
+            :options="operators"
+            dense outlined
+            style="min-width: 90px; max-width: 110px"
+            emit-value map-options
+            size="sm"
+          )
+          q-input(
+            v-model="filterValue"
+            dense outlined
+            placeholder="Value"
+            style="min-width: 140px; max-width: 200px"
+            @keyup.enter="addFilter"
+            :disable="filterOp === 'is.null' || filterOp === 'is.true' || filterOp === 'is.false'"
+            size="sm"
+          )
+          q-btn(icon="add" color="primary" dense flat size="sm" @click="addFilter")
+          q-btn(icon="clear_all" dense flat size="sm" @click="clearFilters" v-if="filters.length")
+          q-chip(
+            v-for="(f, i) in filters"
+            :key="i"
+            removable dense size="sm"
+            color="primary" text-color="white"
+            @remove="removeFilter(i)"
+          )
+            | {{ f.column }} {{ f.op }} {{ f.value }}
 
     template(v-slot:body="props")
       q-tr(:props="props")
@@ -34,7 +68,7 @@
             q-btn(icon="edit" size="xs" flat round color="primary" @click="openEdit(props.row)")
             q-btn(icon="delete" size="xs" flat round color="negative" @click="confirmDelete(props.row)")
           template(v-else)
-            span {{ col.value }}
+            span {{ formatCell(col.value) }}
 
   crud-dialog(
     v-model="showCrud"
@@ -44,6 +78,17 @@
     :resource="resource"
     @saved="fetchData"
   )
+
+  //- Structure dialog
+  q-dialog(v-model="showStructure")
+    q-card(style="min-width: 700px; max-width: 90vw" class="bg-dark")
+      q-card-section.row.items-center
+        .text-h6 Structure: {{ resource?.name }}
+        q-space
+        q-btn(flat round dense icon="close" @click="showStructure = false")
+      q-separator
+      q-card-section.q-pa-sm
+        structure-tab
 </template>
 
 <script>
@@ -52,12 +97,25 @@ import { useSchemaStore } from 'src/stores/schema'
 import { useConnectionStore } from 'src/stores/connection'
 import { api } from 'src/boot/axios'
 import { useQuasar } from 'quasar'
-import FilterBar from './FilterBar.vue'
 import CrudDialog from './CrudDialog.vue'
+import StructureTab from './StructureTab.vue'
+
+const operators = [
+  { label: '=', value: 'eq' },
+  { label: '!=', value: 'neq' },
+  { label: '>', value: 'gt' },
+  { label: '>=', value: 'gte' },
+  { label: '<', value: 'lt' },
+  { label: '<=', value: 'lte' },
+  { label: '~', value: 'like' },
+  { label: '~*', value: 'ilike' },
+  { label: 'null', value: 'is.null' },
+  { label: 'in', value: 'in' }
+]
 
 export default defineComponent({
   name: 'DataGrid',
-  components: { FilterBar, CrudDialog },
+  components: { CrudDialog, StructureTab },
 
   setup () {
     const $q = useQuasar()
@@ -67,10 +125,17 @@ export default defineComponent({
     const rows = ref([])
     const loading = ref(false)
     const totalCount = ref(null)
-    const activeFilters = ref({})
     const showCrud = ref(false)
     const crudMode = ref('create')
     const editingRow = ref(null)
+    const showStructure = ref(false)
+
+    // Filters
+    const filterColumn = ref(null)
+    const filterOp = ref('eq')
+    const filterValue = ref('')
+    const filters = ref([])
+    const activeFilters = ref({})
 
     const pagination = ref({
       sortBy: null,
@@ -86,6 +151,10 @@ export default defineComponent({
       if (!resource.value) return []
       const key = `${resource.value.schema}.${resource.value.name}`
       return schema.columns[key] || []
+    })
+
+    const filterColumnOptions = computed(() => {
+      return gridColumns.value.map(c => ({ label: c.column_name, value: c.column_name }))
     })
 
     const tableColumns = computed(() => {
@@ -108,20 +177,22 @@ export default defineComponent({
       return cols
     })
 
+    function formatCell (value) {
+      if (value === null || value === undefined) return ''
+      if (typeof value === 'object') return JSON.stringify(value)
+      return value
+    }
+
     async function fetchData () {
       if (!resource.value || !conn.active) return
-
       loading.value = true
       try {
         const { schema: s, name } = resource.value
-        const key = `${s}.${name}`
-
         if (!gridColumns.value.length) {
           await schema.fetchColumns(s, name)
         }
 
         const params = { ...activeFilters.value }
-
         if (pagination.value.sortBy) {
           params.order = `${pagination.value.sortBy}.${pagination.value.descending ? 'desc' : 'asc'}`
         }
@@ -131,10 +202,7 @@ export default defineComponent({
 
         const { data, headers } = await api.get(`${conn.baseUrl}/${name}`, {
           params: { ...params, limit, offset },
-          headers: {
-            ...conn.apiHeaders,
-            Prefer: 'count=exact'
-          }
+          headers: { ...conn.apiHeaders, Prefer: 'count=exact' }
         })
 
         rows.value = (data || []).map((r, i) => ({ ...r, __rowIndex: i }))
@@ -163,7 +231,33 @@ export default defineComponent({
       fetchData()
     }
 
-    function onFilter (params) {
+    function addFilter () {
+      if (!filterColumn.value) return
+      if (!filterValue.value && !filterOp.value.startsWith('is.')) return
+
+      let val = filterValue.value
+      if (filterOp.value === 'ilike' || filterOp.value === 'like') {
+        val = `*${val}*`
+      }
+
+      filters.value.push({ column: filterColumn.value, op: filterOp.value, value: val })
+      applyFilters()
+      filterValue.value = ''
+    }
+
+    function removeFilter (index) {
+      filters.value.splice(index, 1)
+      applyFilters()
+    }
+
+    function clearFilters () {
+      filters.value = []
+      applyFilters()
+    }
+
+    function applyFilters () {
+      const params = {}
+      filters.value.forEach(f => { params[f.column] = `${f.op}.${f.value}` })
       activeFilters.value = params
       pagination.value.page = 1
       fetchData()
@@ -184,7 +278,7 @@ export default defineComponent({
     function confirmDelete (row) {
       $q.dialog({
         title: 'Delete Row',
-        message: 'Are you sure you want to delete this row?',
+        message: 'Are you sure?',
         cancel: true,
         persistent: true,
         dark: true
@@ -192,15 +286,8 @@ export default defineComponent({
         try {
           const pks = schema.getPrimaryKeys(resource.value.schema, resource.value.name)
           const params = {}
-          pks.forEach(pk => {
-            params[pk] = `eq.${row[pk]}`
-          })
-
-          await api.delete(`${conn.baseUrl}/${resource.value.name}`, {
-            params,
-            headers: conn.apiHeaders
-          })
-
+          pks.forEach(pk => { params[pk] = `eq.${row[pk]}` })
+          await api.delete(`${conn.baseUrl}/${resource.value.name}`, { params, headers: conn.apiHeaders })
           $q.notify({ type: 'positive', message: 'Row deleted' })
           fetchData()
         } catch (err) {
@@ -213,6 +300,8 @@ export default defineComponent({
       if (val) {
         rows.value = []
         totalCount.value = null
+        filters.value = []
+        activeFilters.value = {}
         pagination.value.page = 1
         pagination.value.sortBy = null
         fetchData()
@@ -220,22 +309,14 @@ export default defineComponent({
     }, { immediate: true })
 
     return {
-      rows,
-      loading,
-      totalCount,
-      pagination,
-      resource,
-      gridColumns,
-      tableColumns,
-      showCrud,
-      crudMode,
-      editingRow,
-      fetchData,
-      onRequest,
-      onFilter,
-      openCreate,
-      openEdit,
-      confirmDelete
+      rows, loading, totalCount, pagination, resource,
+      gridColumns, tableColumns, showCrud, crudMode, editingRow,
+      showStructure,
+      filterColumn, filterOp, filterValue, filters, filterColumnOptions,
+      operators,
+      formatCell, fetchData, onRequest,
+      addFilter, removeFilter, clearFilters,
+      openCreate, openEdit, confirmDelete
     }
   }
 })

@@ -1,23 +1,29 @@
 <template lang="pug">
-.q-code(:class="{ 'q-code--readonly': readonly }")
+.q-code
   .q-code__label.text-caption.text-grey-5(v-if="label") {{ label }}
-  textarea.q-code__editor(
-    ref="editor"
-    :value="displayValue"
-    @input="onInput"
-    :readonly="readonly"
-    :disabled="disabled"
-    :placeholder="placeholder"
-    spellcheck="false"
-    @keydown.tab.prevent="onTab"
-  )
+  //- Editable: ace editor
+  template(v-if="!readonly")
+    v-ace-editor(
+      v-model:value="localValue"
+      lang="json"
+      :theme="'one_dark'"
+      :options="aceOptions"
+      :style="{ minHeight: minHeight, width: '100%' }"
+      @change="onAceChange"
+    )
+  //- Readonly: simple pre
+  pre.q-code__readonly(v-else) {{ displayValue }}
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue'
+import { defineComponent, ref, computed, watch } from 'vue'
+import { VAceEditor } from 'vue3-ace-editor'
+import 'ace-builds/src-noconflict/mode-json'
+import 'ace-builds/src-noconflict/theme-one_dark'
 
 export default defineComponent({
   name: 'QCode',
+  components: { VAceEditor },
   props: {
     modelValue: { type: [String, Object, Array, null], default: null },
     label: { type: String, default: '' },
@@ -29,70 +35,65 @@ export default defineComponent({
   emits: ['update:modelValue'],
 
   setup (props, { emit }) {
-    const editor = ref(null)
+    const localValue = ref('')
 
     const displayValue = computed(() => {
       const val = props.modelValue
       if (val === null || val === undefined) return ''
       if (typeof val === 'object') return JSON.stringify(val, null, 2)
       if (typeof val === 'string') {
-        try {
-          const parsed = JSON.parse(val)
-          return JSON.stringify(parsed, null, 2)
-        } catch {
-          return val
-        }
+        try { return JSON.stringify(JSON.parse(val), null, 2) } catch { return val }
       }
       return String(val)
     })
 
-    function onInput (e) {
-      emit('update:modelValue', e.target.value)
+    const aceOptions = computed(() => ({
+      showPrintMargin: false,
+      fontSize: 12,
+      tabSize: 2,
+      readOnly: props.disabled,
+      useWorker: false,
+      showGutter: true,
+      highlightActiveLine: true,
+      wrap: true
+    }))
+
+    watch(() => props.modelValue, (val) => {
+      const formatted = val === null || val === undefined
+        ? ''
+        : typeof val === 'object'
+          ? JSON.stringify(val, null, 2)
+          : String(val)
+      if (formatted !== localValue.value) {
+        localValue.value = formatted
+      }
+    }, { immediate: true })
+
+    function onAceChange (val) {
+      emit('update:modelValue', val)
     }
 
-    function onTab (e) {
-      if (props.readonly) return
-      const el = e.target
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      el.value = el.value.substring(0, start) + '  ' + el.value.substring(end)
-      el.selectionStart = el.selectionEnd = start + 2
-      emit('update:modelValue', el.value)
-    }
-
-    return { editor, displayValue, onInput, onTab }
+    return { localValue, displayValue, aceOptions, onAceChange }
   }
 })
 </script>
 
 <style lang="scss">
 .q-code {
-  &__editor {
+  &__readonly {
     font-family: 'Roboto Mono', 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.5;
-    background: #1a1a2e;
+    background: #141422;
     color: #d4d4d4;
     border: 1px solid #333;
     border-radius: 4px;
     padding: 8px;
-    width: 100%;
-    min-height: v-bind(minHeight);
-    resize: vertical;
-    tab-size: 2;
-    white-space: pre;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
     overflow: auto;
-
-    &:focus {
-      outline: none;
-      border-color: #1976d2;
-    }
-  }
-
-  &--readonly .q-code__editor {
-    background: #141422;
-    cursor: default;
-    resize: none;
   }
 }
 </style>

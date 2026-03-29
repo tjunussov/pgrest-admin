@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.16.0",
+    "ace-builds": "^1.43.6",
     "axios": "^1.7.0",
     "pinia": "^2.1.0",
-    "pinia-plugin-persistedstate": "^4.7.1",
+    "pinia-plugin-persistedstate": "^3.2.0",
     "quasar": "^2.16.0",
     "vue": "^3.4.0",
-    "vue-router": "^4.3.0"
+    "vue-router": "^4.3.0",
+    "vue3-ace-editor": "^2.2.4"
   },
   "devDependencies": {
     "@quasar/app-vite": "^1.9.0",

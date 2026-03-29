@@ -14,11 +14,14 @@ div.resource-tree
 
   q-tree(
     v-else
+    ref="treeRef"
     :nodes="treeNodes"
     node-key="id"
     :filter="filter"
     dense
-    default-expand-all
+    :default-expand-all="false"
+    :expanded="expandedKeys"
+    @update:expanded="expandedKeys = $event"
     @lazy-load="onLazyLoad"
     selected-color="primary"
     :selected="selectedId"
@@ -32,7 +35,7 @@ div.resource-tree
 </template>
 
 <script>
-import { defineComponent, ref, computed, watch } from 'vue'
+import { defineComponent, ref, computed, watch, onMounted } from 'vue'
 import { useSchemaStore } from 'src/stores/schema'
 
 export default defineComponent({
@@ -43,6 +46,8 @@ export default defineComponent({
     const schema = useSchemaStore()
     const filter = ref('')
     const selectedId = ref(null)
+    const expandedKeys = ref([])
+    const treeRef = ref(null)
 
     const treeNodes = computed(() => {
       return schema.schemas.map(s => ({
@@ -78,7 +83,6 @@ export default defineComponent({
             icon: 'table_chart',
             iconColor: 'blue-4',
             lazy: true,
-            handler: () => emit('select', { type: 'table', schema: schemaName, name: t.table_name }),
             children: buildTableChildren(schemaName, t.table_name)
           }))
         })
@@ -95,8 +99,7 @@ export default defineComponent({
             id: `view:${schemaName}.${v.table_name}`,
             label: v.table_name,
             icon: 'visibility',
-            iconColor: 'green-4',
-            handler: () => emit('select', { type: 'view', schema: schemaName, name: v.table_name })
+            iconColor: 'green-4'
           }))
         })
       }
@@ -218,14 +221,43 @@ export default defineComponent({
       }
     }
 
-    watch(() => schema.schemas, () => {
-      // schemas changed, tree will rebuild
+    // Sync tree selection when active tab changes
+    watch(() => schema.activeResource, (res) => {
+      if (!res) return
+      const id = `${res.type}:${res.schema}.${res.name}`
+      selectedId.value = id
+
+      // Expand parent nodes
+      const parents = [
+        `schema:${res.schema}`,
+        `${res.type === 'view' ? 'views' : 'tables'}:${res.schema}`
+      ]
+      parents.forEach(p => {
+        if (!expandedKeys.value.includes(p)) {
+          expandedKeys.value.push(p)
+        }
+      })
+    }, { immediate: true })
+
+    // Restore tree state after schemas load
+    watch(() => schema.schemas, async (val) => {
+      if (!val?.length) return
+      const res = schema.activeResource
+      if (res) {
+        // Ensure the schema's tables are loaded so tree can expand
+        if (!schema.tables[res.schema]) {
+          await schema.fetchTables(res.schema)
+          await schema.fetchFunctions()
+        }
+      }
     })
 
     return {
       schema,
       filter,
       selectedId,
+      expandedKeys,
+      treeRef,
       treeNodes,
       onLazyLoad,
       onNodeSelect

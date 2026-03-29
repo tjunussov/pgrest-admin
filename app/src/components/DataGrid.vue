@@ -6,6 +6,7 @@
     :loading="loading"
     row-key="__rowIndex"
     dense flat bordered
+    separator="cell"
     :pagination="pagination"
     @request="onRequest"
     :rows-per-page-options="[25, 50, 100, 250]"

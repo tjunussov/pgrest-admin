@@ -2,6 +2,10 @@
 q-layout(view="hHh lpR fFf")
   q-header.bg-dark
     q-toolbar.q-px-sm(style="min-height: 40px")
+      //- Drawer toggle
+      q-btn(flat dense round :icon="settings.drawerCollapsed ? 'chevron_right' : 'chevron_left'" size="sm" @click="settings.toggleDrawer")
+        q-tooltip {{ settings.drawerCollapsed ? 'Show explorer' : 'Hide explorer' }}
+
       //- Logo with connection dropdown
       q-btn-dropdown(flat no-caps dense size="sm" menu-anchor="bottom left" menu-self="top left")
         template(v-slot:label)
@@ -43,7 +47,16 @@ q-layout(view="hHh lpR fFf")
       q-btn(flat dense round icon="add" size="sm" @click="addTab")
         q-tooltip New tab
 
-  q-drawer(:model-value="true" side="left" :width="260" class="bg-dark" :breakpoint="0")
+  q-drawer(
+    :model-value="!settings.drawerCollapsed"
+    side="left"
+    :width="settings.drawerWidth"
+    class="bg-dark"
+    :breakpoint="0"
+    bordered
+  )
+    //- Resize handle
+    .drawer-resize-handle(@mousedown="startResize")
     q-scroll-area.fit
       .q-pa-sm
         resource-tree(v-if="conn.active" @select="onResourceSelect")
@@ -57,9 +70,10 @@ q-layout(view="hHh lpR fFf")
 </template>
 
 <script>
-import { defineComponent, ref, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useConnectionStore } from 'src/stores/connection'
 import { useSchemaStore } from 'src/stores/schema'
+import { useSettingsStore } from 'src/stores/settings'
 import ConnectionDialog from 'src/components/ConnectionDialog.vue'
 import ResourceTree from 'src/components/ResourceTree.vue'
 import pkg from 'app/package.json'
@@ -71,7 +85,31 @@ export default defineComponent({
   setup () {
     const conn = useConnectionStore()
     const schema = useSchemaStore()
+    const settings = useSettingsStore()
     const showConnectionDialog = ref(false)
+
+    // Drawer resize
+    let resizing = false
+    function startResize (e) {
+      resizing = true
+      e.preventDefault()
+      document.addEventListener('mousemove', onResize)
+      document.addEventListener('mouseup', stopResize)
+    }
+    function onResize (e) {
+      if (!resizing) return
+      settings.setDrawerWidth(e.clientX)
+    }
+    function stopResize () {
+      resizing = false
+      document.removeEventListener('mousemove', onResize)
+      document.removeEventListener('mouseup', stopResize)
+    }
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('mousemove', onResize)
+      document.removeEventListener('mouseup', stopResize)
+    })
 
     onMounted(() => {
       conn.initDefaults()
@@ -102,7 +140,9 @@ export default defineComponent({
     return {
       conn,
       schema,
+      settings,
       showConnectionDialog,
+      startResize,
       onLogout,
       onRefresh,
       onResourceSelect,
@@ -112,3 +152,19 @@ export default defineComponent({
   }
 })
 </script>
+
+<style lang="scss">
+.drawer-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+
+  &:hover {
+    background: rgba(25, 118, 210, 0.4);
+  }
+}
+</style>

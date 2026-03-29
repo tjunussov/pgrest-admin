@@ -23,9 +23,7 @@
             span.text-subtitle2 {{ resource?.name }}
             q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
             q-space
-            q-btn(icon="add" color="positive" dense flat size="sm" @click="openCreate")
-              q-tooltip Insert row
-            q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
+            q-btn(icon="refresh" dense flat size="sm" @click="fetchData")
             q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
               q-tooltip Structure
 
@@ -64,6 +62,10 @@
               @remove="removeFilter(i)"
             )
               | {{ f.column }} {{ f.op }} {{ f.value }}
+
+      template(v-slot:header-selection)
+        q-btn(flat dense round icon="add" size="xs" color="positive" @click="openCreate")
+          q-tooltip Insert row
 
       template(v-slot:body="props")
         q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.selected }")

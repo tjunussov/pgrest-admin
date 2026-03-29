@@ -1,5 +1,5 @@
 <template lang="pug">
-.data-grid
+.q-pa-md
   q-table(
     :rows="rows"
     :columns="tableColumns"
@@ -9,6 +9,7 @@
     :pagination="pagination"
     @request="onRequest"
     :rows-per-page-options="[25, 50, 100, 250]"
+    table-class="datagrid-table"
   )
     template(v-slot:top)
       .full-width
@@ -65,7 +66,8 @@
             q-btn(icon="edit" size="xs" flat round color="primary" @click="openEdit(props.row)")
             q-btn(icon="delete" size="xs" flat round color="negative" @click="confirmDelete(props.row)")
           template(v-else)
-            span {{ formatCell(col.value) }}
+            .cell-truncate {{ formatCell(col.value) }}
+              q-tooltip(v-if="isLongValue(col.value)") {{ formatCell(col.value) }}
 
   crud-dialog(
     v-model="showCrud"
@@ -178,6 +180,12 @@ export default defineComponent({
       if (value === null || value === undefined) return ''
       if (typeof value === 'object') return JSON.stringify(value)
       return value
+    }
+
+    function isLongValue (value) {
+      if (value === null || value === undefined) return false
+      if (typeof value === 'object') return true
+      return String(value).length > 50
     }
 
     async function fetchData () {
@@ -311,10 +319,24 @@ export default defineComponent({
       showStructure,
       filterColumn, filterOp, filterValue, filters, filterColumnOptions,
       operators,
-      formatCell, fetchData, onRequest,
+      formatCell, isLongValue, fetchData, onRequest,
       addFilter, removeFilter, clearFilters,
       openCreate, openEdit, confirmDelete
     }
   }
 })
 </script>
+
+<style lang="scss">
+.datagrid-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.cell-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+</style>

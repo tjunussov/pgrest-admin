@@ -14,12 +14,11 @@ q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue
         template(v-for="col in editableColumns" :key="col.column_name")
           //- JSON/JSONB fields — code editor
           template(v-if="isJsonColumn(col)")
-            .text-caption.text-grey-5.q-mb-xs {{ col.column_name }} ({{ col.data_type }}){{ col.is_pk ? ' PK' : '' }}
-            textarea.sql-editor(
-              :value="formData[col.column_name]"
-              @input="formData[col.column_name] = $event.target.value"
+            q-code(
+              v-model="formData[col.column_name]"
+              :label="`${col.column_name} (${col.data_type})${col.is_pk ? ' PK' : ''}`"
               :disabled="mode === 'edit' && col.is_pk"
-              style="min-height: 120px"
+              min-height="120px"
             )
           //- Regular fields
           q-input(
@@ -48,11 +47,13 @@ import { useConnectionStore } from 'src/stores/connection'
 import { useSchemaStore } from 'src/stores/schema'
 import { api } from 'src/boot/axios'
 import { Notify } from 'quasar'
+import QCode from './ui/QCode.vue'
 
 const JSON_TYPES = ['json', 'jsonb', 'ARRAY', 'USER-DEFINED']
 
 export default defineComponent({
   name: 'CrudDialog',
+  components: { QCode },
   props: {
     modelValue: Boolean,
     mode: { type: String, default: 'create' },

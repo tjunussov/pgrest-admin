@@ -1,6 +1,6 @@
 <template lang="pug">
 q-layout(view="hHh lpR fFf")
-  q-header.bg-dark(bordered)
+  q-header.bg-dark
     q-toolbar.q-px-sm(style="min-height: 40px")
       //- Logo with connection dropdown
       q-btn-dropdown(flat no-caps dense size="sm" menu-anchor="bottom left" menu-self="top left")
@@ -43,7 +43,7 @@ q-layout(view="hHh lpR fFf")
       q-btn(flat dense round icon="add" size="sm" @click="addTab")
         q-tooltip New tab
 
-  q-drawer(:model-value="true" side="left" bordered :width="260" class="bg-dark" :breakpoint="0")
+  q-drawer(:model-value="true" side="left" :width="260" class="bg-dark" :breakpoint="0")
     q-scroll-area.fit
       .q-pa-sm
         resource-tree(v-if="conn.active" @select="onResourceSelect")

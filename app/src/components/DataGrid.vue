@@ -51,26 +51,34 @@
             )
             //- Filter menu on column
             q-menu(anchor="bottom left" self="top left")
-              q-card.bg-dark(style="min-width: 220px")
-                q-card-section.q-pa-sm
-                  .text-caption.text-grey-5.q-mb-xs Filter: {{ col.label }}
-                  q-select(
-                    v-model="colFilterOp[col.name]"
-                    :options="operators"
-                    dense outlined
-                    emit-value map-options
-                    class="q-mb-xs"
-                  )
-                  q-input(
-                    v-model="colFilterVal[col.name]"
-                    dense outlined
-                    placeholder="Value"
-                    @keyup.enter="addColumnFilter(col.name)"
-                    :disable="(colFilterOp[col.name] || 'eq').startsWith('is.')"
-                  )
-                q-card-actions(align="right" class="q-pa-xs")
-                  q-btn(flat dense no-caps label="Clear" size="sm" @click="clearColumnFilter(col.name)" v-close-popup)
-                  q-btn(flat dense no-caps label="Apply" size="sm" color="primary" @click="addColumnFilter(col.name)" v-close-popup)
+              .bg-dark.q-pa-sm(style="min-width: 240px")
+                .text-caption.text-grey-5.q-mb-xs {{ col.label }}
+                //- Existing filters for this column
+                .row.items-center.q-mb-xs(v-for="(f, i) in getColumnFilters(col.name)" :key="i")
+                  q-chip(dense removable size="sm" color="blue-grey-8" text-color="white" @remove="removeFilter(filters.indexOf(f))")
+                    | {{ f.op }} {{ f.value }}
+                //- New filter input
+                q-input(
+                  v-model="colFilterVal[col.name]"
+                  dense outlined
+                  placeholder="Value"
+                  @keyup.enter="addColumnFilter(col.name)"
+                  :disable="(colFilterOp[col.name] || 'eq').startsWith('is.')"
+                )
+                  template(v-slot:prepend)
+                    q-btn-dropdown(flat dense no-caps size="sm" :label="opLabel(col.name)" style="min-width: 32px")
+                      q-list(dense)
+                        q-item(
+                          v-for="op in operators"
+                          :key="op.value"
+                          clickable v-close-popup
+                          dense
+                          @click="colFilterOp[col.name] = op.value"
+                          :active="(colFilterOp[col.name] || 'eq') === op.value"
+                        )
+                          q-item-section {{ op.label }}
+                  template(v-slot:append)
+                    q-btn(flat dense round icon="add" size="xs" @click="addColumnFilter(col.name)")
 
       template(v-slot:body="props")
         q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.selected }")
@@ -370,15 +378,24 @@ export default defineComponent({
       fetchData()
     }
 
+    function getColumnFilters (colName) {
+      return filters.value.filter(f => f.column === colName)
+    }
+
+    function opLabel (colName) {
+      const op = colFilterOp.value[colName] || 'eq'
+      const found = operators.find(o => o.value === op)
+      return found ? found.label : '='
+    }
+
     function addColumnFilter (colName) {
       const op = colFilterOp.value[colName] || 'eq'
       const val = colFilterVal.value[colName] || ''
       if (!val && !op.startsWith('is.')) return
-      // Remove existing filter for this column
-      filters.value = filters.value.filter(f => f.column !== colName)
       let filterVal = val
       if (op === 'ilike' || op === 'like') filterVal = `*${val}*`
       filters.value.push({ column: colName, op, value: filterVal })
+      colFilterVal.value[colName] = ''
       applyFilters()
     }
 
@@ -398,7 +415,22 @@ export default defineComponent({
     }
     function applyFilters () {
       const params = {}
-      filters.value.forEach(f => { params[f.column] = `${f.op}.${f.value}` })
+      // Group by column — multiple filters on same column use last one
+      // (PostgREST doesn't support duplicate query keys)
+      const grouped = {}
+      filters.value.forEach(f => {
+        if (!grouped[f.column]) grouped[f.column] = []
+        grouped[f.column].push(f)
+      })
+      Object.entries(grouped).forEach(([col, arr]) => {
+        if (arr.length === 1) {
+          params[col] = `${arr[0].op}.${arr[0].value}`
+        } else {
+          // Multiple: use the last filter (PostgREST limitation)
+          const last = arr[arr.length - 1]
+          params[col] = `${last.op}.${last.value}`
+        }
+      })
       activeFilters.value = params
       pagination.value.page = 1
       fetchData()
@@ -443,7 +475,7 @@ export default defineComponent({
       selected, inlineForm, editMode,
       colFilterOp, colFilterVal, filters,
       operators,
-      isJsonColumn, formatCell, isLongValue, hasFilter,
+      isJsonColumn, formatCell, isLongValue, hasFilter, getColumnFilters, opLabel,
       fetchData, onRequest, openCreate, clearSelection, saveInline,
       addColumnFilter, clearColumnFilter, removeFilter, clearFilters, confirmDelete
     }

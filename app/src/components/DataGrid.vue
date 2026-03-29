@@ -9,6 +9,8 @@
       row-key="__rowIndex"
       dense flat bordered
       separator="cell"
+      selection="single"
+      v-model:selected="selected"
       :pagination="pagination"
       @request="onRequest"
       :rows-per-page-options="[25, 50, 100, 250]"
@@ -26,7 +28,7 @@
             q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
             q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
               q-tooltip Structure
-            q-btn(icon="delete" dense flat size="sm" color="negative" @click="confirmDelete" class="q-ml-xs" v-if="selectedRowIndex >= 0")
+            q-btn(icon="delete" dense flat size="sm" color="negative" @click="confirmDelete" class="q-ml-xs" v-if="selected.length")
               q-tooltip Delete selected
 
           //- Inline filters
@@ -65,46 +67,47 @@
             )
               | {{ f.column }} {{ f.op }} {{ f.value }}
 
+      //- Custom body with manual checkbox (required when using body slot + selection)
       template(v-slot:body="props")
-        q-tr(
-          :props="props"
-          :class="{ 'bg-blue-grey-10': props.row.__rowIndex === selectedRowIndex }"
-          @click="selectRow(props.row)"
-          style="cursor: pointer"
-        )
+        q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.selected }")
+          q-td(auto-width)
+            q-checkbox(v-model="props.selected" dense)
           q-td(v-for="col in props.cols" :key="col.name" :props="props")
             .cell-truncate {{ formatCell(col.value) }}
               q-tooltip(v-if="isLongValue(col.value)") {{ formatCell(col.value) }}
 
-  //- Bottom editor panel (always visible)
-  q-separator
-  .inline-editor.bg-dark.q-pa-sm(style="flex-shrink: 0; max-height: 40vh; overflow-y: auto")
-    .row.items-center.q-mb-sm
-      q-icon(:name="editMode === 'create' ? 'add' : 'edit'" size="xs" class="q-mr-xs" color="primary")
-      span.text-caption.text-bold {{ editMode === 'create' ? 'New Row' : 'Edit Row' }}
-      q-space
-      q-btn(flat dense round icon="open_in_new" size="xs" @click="popOutToDialog" v-if="selectedRowIndex >= 0")
-        q-tooltip Open in dialog
-      q-btn(flat dense round icon="save" size="xs" color="positive" @click="saveInline" :loading="saving")
-        q-tooltip Save
-      q-btn(flat dense round icon="clear" size="xs" @click="newRow" v-if="selectedRowIndex >= 0")
-        q-tooltip Clear / New
-    .row.q-col-gutter-sm
-      .col-12.col-sm-6.col-md-4(v-for="col in editableColumns" :key="col.column_name")
-        template(v-if="isJsonColumn(col)")
-          q-code(
-            v-model="inlineForm[col.column_name]"
-            :label="`${col.column_name} (${col.data_type})`"
-            :readonly="editMode === 'edit' && col.is_pk"
-            min-height="80px"
-          )
-        q-input(
-          v-else
-          v-model="inlineForm[col.column_name]"
-          :label="`${col.column_name} (${col.data_type})`"
-          dense outlined
-          :disable="editMode === 'edit' && col.is_pk"
-        )
+  //- Bottom editor panel — seamless dialog pinned to bottom
+  q-dialog(:model-value="true" seamless position="bottom" :persistent="true" no-route-dismiss no-shake)
+    q-card.full-width(style="max-height: 40vh" class="bg-dark")
+      q-card-section.q-py-xs.q-px-sm
+        .row.items-center
+          q-icon(:name="editMode === 'create' ? 'add_circle' : 'edit'" size="xs" class="q-mr-xs" color="primary")
+          span.text-caption.text-bold {{ editMode === 'create' ? 'New Row' : 'Edit Row' }}
+          q-space
+          q-btn(flat dense round icon="open_in_new" size="xs" @click="popOutToDialog" v-if="selected.length")
+            q-tooltip Open in dialog
+          q-btn(flat dense round icon="save" size="xs" color="positive" @click="saveInline" :loading="saving")
+            q-tooltip Save
+          q-btn(flat dense round icon="clear" size="xs" @click="newRow" v-if="selected.length")
+            q-tooltip Clear / New
+      q-separator
+      q-card-section.q-pa-sm(style="overflow-y: auto; max-height: 35vh")
+        .row.q-col-gutter-sm
+          .col-12.col-sm-6.col-md-4(v-for="col in editableColumns" :key="col.column_name")
+            template(v-if="isJsonColumn(col)")
+              q-code(
+                v-model="inlineForm[col.column_name]"
+                :label="`${col.column_name} (${col.data_type})`"
+                :readonly="editMode === 'edit' && col.is_pk"
+                min-height="80px"
+              )
+            q-input(
+              v-else
+              v-model="inlineForm[col.column_name]"
+              :label="`${col.column_name} (${col.data_type})`"
+              dense outlined
+              :disable="editMode === 'edit' && col.is_pk"
+            )
 
   //- Structure dialog
   q-dialog(v-model="showStructure")
@@ -171,8 +174,8 @@ export default defineComponent({
     const showStructure = ref(false)
     const saving = ref(false)
 
-    // Selection
-    const selectedRowIndex = ref(-1)
+    // Selection — v-model:selected uses array
+    const selected = ref([])
     const inlineForm = ref({})
     const editMode = ref('create')
 
@@ -247,27 +250,27 @@ export default defineComponent({
       inlineForm.value = form
     }
 
-    function selectRow (row) {
-      if (selectedRowIndex.value === row.__rowIndex) {
-        // Deselect → go to new row mode
-        newRow()
-      } else {
-        selectedRowIndex.value = row.__rowIndex
+    // Watch selection changes from checkbox — populate editor
+    watch(selected, (val) => {
+      if (val.length) {
         editMode.value = 'edit'
-        populateForm(row)
+        populateForm(val[0])
+      } else {
+        editMode.value = 'create'
+        populateForm(null)
       }
-    }
+    })
 
     function newRow () {
-      selectedRowIndex.value = -1
+      selected.value = []
       editMode.value = 'create'
       populateForm(null)
     }
 
     function popOutToDialog () {
-      const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+      if (!selected.value.length) return
       crudMode.value = 'edit'
-      editingRow.value = row ? { ...row } : null
+      editingRow.value = { ...selected.value[0] }
       showCrud.value = true
     }
 
@@ -298,7 +301,7 @@ export default defineComponent({
           })
           Notify.create({ type: 'positive', message: 'Row inserted' })
         } else {
-          const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+          const row = selected.value[0]
           if (!row) return
           const pks = schema.getPrimaryKeys(resource.value.schema, name)
           const params = {}
@@ -381,7 +384,7 @@ export default defineComponent({
     }
 
     function confirmDelete () {
-      const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+      const row = selected.value[0]
       if (!row) return
       $q.dialog({ title: 'Delete Row', message: 'Are you sure?', cancel: true, persistent: true, dark: true })
         .onOk(async () => {
@@ -416,11 +419,11 @@ export default defineComponent({
       rows, loading, totalCount, pagination, resource, saving,
       gridColumns, tableColumns, editableColumns,
       showCrud, crudMode, editingRow, showStructure,
-      selectedRowIndex, inlineForm, editMode,
+      selected, inlineForm, editMode,
       filterColumn, filterOp, filterValue, filters, filterColumnOptions,
       operators,
       isJsonColumn, formatCell, isLongValue,
-      fetchData, onRequest, selectRow, newRow,
+      fetchData, onRequest, newRow,
       popOutToDialog, saveInline,
       addFilter, removeFilter, clearFilters, confirmDelete
     }
@@ -438,8 +441,5 @@ export default defineComponent({
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 300px;
-}
-.inline-editor {
-  border-top: 2px solid #1976d2;
 }
 </style>

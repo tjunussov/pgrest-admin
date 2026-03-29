@@ -53,9 +53,11 @@ q-layout(view="hHh lpR fFf")
 
 <script>
 import { defineComponent, ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { useConnectionStore } from 'src/stores/connection'
 import { useSchemaStore } from 'src/stores/schema'
 import { useSettingsStore } from 'src/stores/settings'
+import { Notify } from 'quasar'
 import ConnectionDialog from 'src/components/ConnectionDialog.vue'
 import ResourceTree from 'src/components/ResourceTree.vue'
 import pkg from 'app/package.json'
@@ -91,12 +93,45 @@ export default defineComponent({
       document.removeEventListener('mouseup', stopResize)
     })
 
-    onMounted(() => {
-      conn.initDefaults()
-      if (!conn.active) {
-        showConnectionDialog.value = true
-      } else {
+    const router = useRouter()
+
+    async function handleDeeplink () {
+      // Parse query params from URL (supports both ?url=... and #/qr?url=...)
+      const params = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '')
+      const url = params.get('url')
+      if (!url) return false
+
+      // Collect all params except 'url' as login credentials
+      const loginParams = {}
+      for (const [key, val] of params.entries()) {
+        if (key !== 'url') loginParams[key] = val
+      }
+
+      if (!Object.keys(loginParams).length) return false
+
+      Notify.create({ type: 'info', message: `Connecting to ${url}...` })
+      const res = await conn.login(url, loginParams)
+      if (res.success) {
+        Notify.create({ type: 'positive', message: 'Connected via deeplink' })
         schema.fetchSchemas()
+        // Clean URL — remove query params
+        router.replace({ path: '/', query: {} })
+        return true
+      } else {
+        Notify.create({ type: 'negative', message: `Deeplink login failed: ${res.error}` })
+        return false
+      }
+    }
+
+    onMounted(async () => {
+      conn.initDefaults()
+      const linked = await handleDeeplink()
+      if (!linked) {
+        if (!conn.active) {
+          showConnectionDialog.value = true
+        } else {
+          schema.fetchSchemas()
+        }
       }
     })
 

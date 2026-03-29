@@ -36,11 +36,11 @@ export const useConnectionStore = defineStore('connection', {
 
         const label = params.email || params.username || params.user || Object.values(params)[0] || ''
         const id = `${cleanUrl}_${label}_${Date.now()}`
-        const conn = { id, name: `${label}@${new URL(cleanUrl).host}`, url: cleanUrl, token, email: label }
+        const conn = { id, name: `${label}@${new URL(cleanUrl).host}`, url: cleanUrl, token, email: label, loginParams: { ...params } }
 
         const existing = this.connections.findIndex(c => c.url === cleanUrl && c.email === label)
         if (existing >= 0) {
-          this.connections[existing] = { ...this.connections[existing], token, name: conn.name }
+          this.connections[existing] = { ...this.connections[existing], token, name: conn.name, loginParams: { ...params } }
           this.activeId = this.connections[existing].id
         } else {
           this.connections.push(conn)

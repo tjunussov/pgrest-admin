@@ -1,7 +1,8 @@
 <template lang="pug">
-div.resource-tree
+.resource-tree
   q-input(
     v-model="filter"
+    v-if="false"
     dense outlined
     placeholder="Filter..."
     class="q-mb-sm"

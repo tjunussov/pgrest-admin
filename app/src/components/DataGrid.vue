@@ -20,7 +20,7 @@
         .full-width
           .row.items-center.q-mb-xs
             q-icon(name="table_chart" color="primary" size="sm" class="q-mr-xs")
-            span.text-subtitle2 {{ resource?.name }}
+            span.text-h6.text-weight-bold Table {{ resource?.name }}
             q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
             q-space
             //- Active filter chips

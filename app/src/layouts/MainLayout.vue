@@ -11,8 +11,8 @@ q-layout(view="hHh lpR fFf")
     .drawer-resize-handle(@mousedown="startResize")
     .column.fit
       //- Connection section (fixed top)
-      .col-auto.q-pa-sm.q-pb-none
-        .row.items-center.q-mb-sm
+      .col-auto
+        .row.items-center
           q-btn-dropdown.full-width(
             flat no-caps dense
             :label="conn.active ? conn.active.name : 'Connect...'"
@@ -48,7 +48,7 @@ q-layout(view="hHh lpR fFf")
           resource-tree(v-if="conn.active" @select="onResourceSelect" @select-new="onResourceSelectNew")
 
       //- Version (fixed bottom)
-      .col-auto.text-caption.text-grey-7.text-center.q-pa-xs PgRestAdmin v{{ version }}
+      .col-auto.text-caption.text-grey-7.text-center.q-pa-sm PgRestAdmin v{{ version }}
 
   q-page-container
     router-view
@@ -101,25 +101,37 @@ export default defineComponent({
     const router = useRouter()
 
     async function handleDeeplink () {
-      // Parse query params from URL (supports both ?url=... and #/qr?url=...)
-      const params = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '')
-      const url = params.get('url')
-      if (!url) return false
+      const search = window.location.search || window.location.hash.split('?')[1] || ''
+      const params = new URLSearchParams(search)
 
-      // Collect all params except 'url' as login credentials
-      const loginParams = {}
-      for (const [key, val] of params.entries()) {
-        if (key !== 'url') loginParams[key] = val
+      let url, loginParams
+
+      // Base64 encoded: ?c=base64string
+      const encoded = params.get('c')
+      if (encoded) {
+        try {
+          const decoded = JSON.parse(atob(encoded))
+          url = decoded.url
+          loginParams = {}
+          Object.entries(decoded).forEach(([k, v]) => { if (k !== 'url') loginParams[k] = v })
+        } catch { return false }
+      } else {
+        // Plain params: ?url=...&email=...&pass=...
+        url = params.get('url')
+        if (!url) return false
+        loginParams = {}
+        for (const [key, val] of params.entries()) {
+          if (key !== 'url') loginParams[key] = val
+        }
       }
 
-      if (!Object.keys(loginParams).length) return false
+      if (!url || !Object.keys(loginParams).length) return false
 
-      Notify.create({ type: 'info', message: `Connecting to ${url}...` })
+      Notify.create({ type: 'info', message: `Connecting to ${new URL(url).host}...` })
       const res = await conn.login(url, loginParams)
       if (res.success) {
         Notify.create({ type: 'positive', message: 'Connected via deeplink' })
         schema.fetchSchemas()
-        // Clean URL — remove query params
         router.replace({ path: '/', query: {} })
         return true
       } else {
@@ -151,12 +163,12 @@ export default defineComponent({
 
     function shareLink () {
       if (!conn.active) return
+      const payload = { url: conn.active.url, ...conn.active.loginParams }
+      const encoded = btoa(JSON.stringify(payload))
       const base = window.location.origin + window.location.pathname
-      const params = new URLSearchParams({ url: conn.active.url })
-      if (conn.active.email) params.set('email', conn.active.email)
-      const link = `${base}?${params.toString()}`
+      const link = `${base}?c=${encoded}`
       navigator.clipboard.writeText(link).then(() => {
-        Notify.create({ type: 'positive', message: 'Connection link copied to clipboard' })
+        Notify.create({ type: 'positive', message: 'Connection link copied (with credentials)' })
       }).catch(() => {
         Notify.create({ type: 'info', message: link })
       })

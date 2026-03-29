@@ -2,6 +2,8 @@
 
 A lightweight web-based administration tool for PostgreSQL databases exposed via [PostgREST](https://postgrest.org). A "pgAdmin-lite" experience for browsing schemas, inspecting metadata, and performing CRUD operations.
 
+**Online Demo:** [https://pgadmin.imbir.kz](https://pgadmin.imbir.kz)
+
 ## Features
 
 - **Resource Explorer** — hierarchical tree of schemas, tables, views, columns, indexes, triggers, constraints, and functions with lazy loading

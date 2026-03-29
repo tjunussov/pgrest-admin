@@ -23,13 +23,11 @@
             span.text-subtitle2 {{ resource?.name }}
             q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
             q-space
-            q-btn(icon="add" color="positive" dense flat size="sm" @click="newRow")
+            q-btn(icon="add" color="positive" dense flat size="sm" @click="openCreate")
               q-tooltip Insert row
             q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
             q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
               q-tooltip Structure
-            q-btn(icon="delete" dense flat size="sm" color="negative" @click="confirmDelete" class="q-ml-xs" v-if="selected.length")
-              q-tooltip Delete selected
 
           //- Inline filters
           .row.items-center.q-gutter-xs
@@ -76,38 +74,31 @@
             .cell-truncate {{ formatCell(col.value) }}
               q-tooltip(v-if="isLongValue(col.value)") {{ formatCell(col.value) }}
 
-  //- Bottom editor panel — seamless dialog pinned to bottom
+  //- Bottom preview panel — seamless dialog pinned to bottom
   q-dialog(:model-value="true" seamless position="bottom" :persistent="true" no-route-dismiss no-shake)
     q-card.full-width(style="max-height: 40vh" class="bg-dark")
       q-card-section.q-py-xs.q-px-sm
         .row.items-center
-          q-icon(:name="editMode === 'create' ? 'add_circle' : 'edit'" size="xs" class="q-mr-xs" color="primary")
-          span.text-caption.text-bold {{ editMode === 'create' ? 'New Row' : 'Edit Row' }}
+          q-icon(:name="selected.length ? 'visibility' : 'info'" size="xs" class="q-mr-xs" color="primary")
+          span.text-caption.text-bold {{ selected.length ? 'Row Preview' : 'No row selected' }}
           q-space
-          q-btn(flat dense round icon="open_in_new" size="xs" @click="popOutToDialog" v-if="selected.length")
-            q-tooltip Open in dialog
-          q-btn(flat dense round icon="save" size="xs" color="positive" @click="saveInline" :loading="saving")
-            q-tooltip Save
-          q-btn(flat dense round icon="clear" size="xs" @click="newRow" v-if="selected.length")
-            q-tooltip Clear / New
+          template(v-if="selected.length")
+            q-btn(flat dense round icon="edit" size="xs" color="primary" @click="openEdit")
+              q-tooltip Edit in dialog
+            q-btn(flat dense round icon="delete" size="xs" color="negative" @click="confirmDelete")
+              q-tooltip Delete
+          q-btn(flat dense round icon="add" size="xs" color="positive" @click="openCreate")
+            q-tooltip Insert new row
       q-separator
       q-card-section.q-pa-sm(style="overflow-y: auto; max-height: 35vh")
-        .row.q-col-gutter-sm
-          .col-12.col-sm-6.col-md-4(v-for="col in editableColumns" :key="col.column_name")
-            template(v-if="isJsonColumn(col)")
-              q-code(
-                v-model="inlineForm[col.column_name]"
-                :label="`${col.column_name} (${col.data_type})`"
-                :readonly="editMode === 'edit' && col.is_pk"
-                min-height="80px"
-              )
-            q-input(
-              v-else
-              v-model="inlineForm[col.column_name]"
-              :label="`${col.column_name} (${col.data_type})`"
-              dense outlined
-              :disable="editMode === 'edit' && col.is_pk"
-            )
+        template(v-if="selected.length")
+          .row.q-col-gutter-xs
+            .col-12.col-sm-6.col-md-4(v-for="col in gridColumns" :key="col.column_name")
+              .text-caption.text-grey-5 {{ col.column_name }}
+                q-badge.q-ml-xs(v-if="col.is_pk" label="PK" color="amber-8" dense)
+              pre.preview-value {{ formatPreview(selected[0][col.column_name]) }}
+        .text-center.text-grey-6.q-pa-md(v-else)
+          | Click a checkbox to preview a row
 
   //- Structure dialog
   q-dialog(v-model="showStructure")
@@ -136,12 +127,9 @@ import { defineComponent, ref, computed, watch } from 'vue'
 import { useSchemaStore } from 'src/stores/schema'
 import { useConnectionStore } from 'src/stores/connection'
 import { api } from 'src/boot/axios'
-import { useQuasar, Notify } from 'quasar'
+import { useQuasar } from 'quasar'
 import CrudDialog from './CrudDialog.vue'
 import StructureTab from './StructureTab.vue'
-import QCode from './ui/QCode.vue'
-
-const JSON_TYPES = ['json', 'jsonb', 'ARRAY', 'USER-DEFINED']
 
 const operators = [
   { label: '=', value: 'eq' },
@@ -158,7 +146,7 @@ const operators = [
 
 export default defineComponent({
   name: 'DataGrid',
-  components: { CrudDialog, StructureTab, QCode },
+  components: { CrudDialog, StructureTab },
 
   setup () {
     const $q = useQuasar()
@@ -172,12 +160,9 @@ export default defineComponent({
     const crudMode = ref('create')
     const editingRow = ref(null)
     const showStructure = ref(false)
-    const saving = ref(false)
 
-    // Selection — v-model:selected uses array
+    // Selection
     const selected = ref([])
-    const inlineForm = ref({})
-    const editMode = ref('create')
 
     // Filters
     const filterColumn = ref(null)
@@ -199,13 +184,6 @@ export default defineComponent({
       return schema.columns[key] || []
     })
 
-    const editableColumns = computed(() => {
-      return gridColumns.value.filter(c => {
-        if (editMode.value === 'create' && c.column_default?.startsWith('nextval')) return false
-        return true
-      })
-    })
-
     const filterColumnOptions = computed(() => {
       return gridColumns.value.map(c => ({ label: c.column_name, value: c.column_name }))
     })
@@ -221,14 +199,6 @@ export default defineComponent({
       }))
     })
 
-    function isJsonColumn (col) { return JSON_TYPES.includes(col.data_type) }
-
-    function stringify (val) {
-      if (val === null || val === undefined) return ''
-      if (typeof val === 'object') return JSON.stringify(val, null, 2)
-      return String(val)
-    }
-
     function formatCell (value) {
       if (value === null || value === undefined) return ''
       if (typeof value === 'object') return JSON.stringify(value)
@@ -241,83 +211,23 @@ export default defineComponent({
       return String(value).length > 50
     }
 
-    function populateForm (row) {
-      const form = {}
-      gridColumns.value.forEach(c => {
-        const v = row ? row[c.column_name] : null
-        form[c.column_name] = isJsonColumn(c) ? stringify(v) : v
-      })
-      inlineForm.value = form
+    function formatPreview (value) {
+      if (value === null || value === undefined) return 'NULL'
+      if (typeof value === 'object') return JSON.stringify(value, null, 2)
+      return String(value)
     }
 
-    // Watch selection changes from checkbox — populate editor
-    watch(selected, (val) => {
-      if (val.length) {
-        editMode.value = 'edit'
-        populateForm(val[0])
-      } else {
-        editMode.value = 'create'
-        populateForm(null)
-      }
-    })
-
-    function newRow () {
-      selected.value = []
-      editMode.value = 'create'
-      populateForm(null)
+    function openCreate () {
+      crudMode.value = 'create'
+      editingRow.value = null
+      showCrud.value = true
     }
 
-    function popOutToDialog () {
+    function openEdit () {
       if (!selected.value.length) return
       crudMode.value = 'edit'
       editingRow.value = { ...selected.value[0] }
       showCrud.value = true
-    }
-
-    function parseJsonField (val, col) {
-      if (!isJsonColumn(col)) return val
-      if (typeof val === 'string') {
-        try { return JSON.parse(val) } catch { return val }
-      }
-      return val
-    }
-
-    async function saveInline () {
-      if (!resource.value) return
-      saving.value = true
-      try {
-        const { name } = resource.value
-        const payload = {}
-        editableColumns.value.forEach(c => {
-          const val = inlineForm.value[c.column_name]
-          if (val !== null && val !== '' && val !== undefined) {
-            payload[c.column_name] = parseJsonField(val, c)
-          }
-        })
-
-        if (editMode.value === 'create') {
-          await api.post(`${conn.baseUrl}/${name}`, payload, {
-            headers: { ...conn.apiHeaders, Prefer: 'return=representation' }
-          })
-          Notify.create({ type: 'positive', message: 'Row inserted' })
-        } else {
-          const row = selected.value[0]
-          if (!row) return
-          const pks = schema.getPrimaryKeys(resource.value.schema, name)
-          const params = {}
-          pks.forEach(pk => { params[pk] = `eq.${row[pk]}` })
-          await api.patch(`${conn.baseUrl}/${name}`, payload, {
-            params, headers: { ...conn.apiHeaders, Prefer: 'return=representation' }
-          })
-          Notify.create({ type: 'positive', message: 'Row updated' })
-        }
-        newRow()
-        fetchData()
-      } catch (err) {
-        Notify.create({ type: 'negative', message: `Save failed: ${err.response?.data?.message || err.message}` })
-      } finally {
-        saving.value = false
-      }
     }
 
     async function fetchData () {
@@ -410,21 +320,20 @@ export default defineComponent({
         activeFilters.value = {}
         pagination.value.page = 1
         pagination.value.sortBy = null
-        newRow()
+        selected.value = []
         fetchData()
       }
     }, { immediate: true })
 
     return {
-      rows, loading, totalCount, pagination, resource, saving,
-      gridColumns, tableColumns, editableColumns,
+      rows, loading, totalCount, pagination, resource,
+      gridColumns, tableColumns,
       showCrud, crudMode, editingRow, showStructure,
-      selected, inlineForm, editMode,
+      selected,
       filterColumn, filterOp, filterValue, filters, filterColumnOptions,
       operators,
-      isJsonColumn, formatCell, isLongValue,
-      fetchData, onRequest, newRow,
-      popOutToDialog, saveInline,
+      formatCell, isLongValue, formatPreview,
+      fetchData, onRequest, openCreate, openEdit,
       addFilter, removeFilter, clearFilters, confirmDelete
     }
   }
@@ -441,5 +350,17 @@ export default defineComponent({
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 300px;
+}
+.preview-value {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  margin: 0;
+  padding: 2px 4px;
+  background: #1a1a2e;
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+  overflow: auto;
 }
 </style>

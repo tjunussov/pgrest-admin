@@ -1,0 +1,47 @@
+body {
+  font-family: 'Roboto', sans-serif;
+}
+
+.resource-tree {
+  .q-tree__node-header {
+    padding: 2px 4px;
+  }
+}
+
+.sql-editor {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 13px;
+  min-height: 150px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 8px;
+  width: 100%;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.data-grid {
+  .q-table__top {
+    padding: 8px;
+  }
+}
+
+.exec-sql-snippet {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 11px;
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.footer-bar {
+  font-size: 11px;
+  opacity: 0.7;
+}

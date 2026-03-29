@@ -1,0 +1,22 @@
+services:
+  pgrestadmin:
+    image: node:20-alpine
+    container_name: pgrestadmin
+    working_dir: /app
+    volumes:
+      - ./app:/app
+      - pgrestadmin_modules:/app/node_modules
+    env_file: .env
+    expose:
+      - "9000"
+    command: sh -c "npm i -g @quasar/cli && npm install && exec quasar dev -H 0.0.0.0 -p 9000"
+    networks:
+      - nginx
+    restart: unless-stopped
+
+volumes:
+  pgrestadmin_modules:
+
+networks:
+  nginx:
+    external: true

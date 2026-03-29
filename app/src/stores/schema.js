@@ -247,5 +247,9 @@ export const useSchemaStore = defineStore('schema', {
       this.tabs = []
       this.activeTabId = null
     }
+  },
+
+  persist: {
+    pick: ['tabs', 'activeTabId', 'activeResource', 'sqlCounter']
   }
 })

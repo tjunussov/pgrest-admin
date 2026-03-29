@@ -13,6 +13,10 @@ q-layout(view="hHh lpR fFf")
               q-icon(name="link" size="xs")
             q-item-section Connect
           template(v-if="conn.active")
+            q-item(clickable v-close-popup @click="onRefresh")
+              q-item-section(avatar)
+                q-icon(name="refresh" size="xs")
+              q-item-section Refresh
             q-separator
             q-item(clickable v-close-popup @click="onLogout")
               q-item-section(avatar)
@@ -21,7 +25,7 @@ q-layout(view="hHh lpR fFf")
 
       q-separator.q-mx-xs(vertical inset)
 
-      //- Session tabs
+      //- Session tabs (left-aligned)
       q-tabs(
         :model-value="schema.activeTabId"
         @update:model-value="schema.activateTab"
@@ -29,7 +33,6 @@ q-layout(view="hHh lpR fFf")
         active-color="white"
         indicator-color="primary"
         class="text-grey-6"
-        style="flex: 1; min-width: 0"
       )
         q-tab(v-for="tab in schema.tabs" :key="tab.id" :name="tab.id" no-caps)
           .row.items-center.no-wrap
@@ -39,10 +42,6 @@ q-layout(view="hHh lpR fFf")
 
       q-btn(flat dense round icon="add" size="sm" @click="addTab")
         q-tooltip New tab
-
-      q-space
-
-      q-btn(flat dense round icon="refresh" size="sm" @click="onRefresh" v-if="conn.active")
 
   q-drawer(:model-value="true" side="left" bordered :width="260" class="bg-dark" :breakpoint="0")
     q-scroll-area.fit

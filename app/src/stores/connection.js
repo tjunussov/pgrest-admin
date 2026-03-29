@@ -1,22 +1,10 @@
 import { defineStore } from 'pinia'
 import { api } from 'src/boot/axios'
 
-const STORAGE_KEY = 'pgrestadmin_connections'
-const ACTIVE_KEY = 'pgrestadmin_active'
-
-function loadFromStorage (key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
 export const useConnectionStore = defineStore('connection', {
   state: () => ({
-    connections: loadFromStorage(STORAGE_KEY, []),
-    activeId: loadFromStorage(ACTIVE_KEY, null),
+    connections: [],
+    activeId: null,
     loginLoading: false
   }),
 
@@ -37,11 +25,6 @@ export const useConnectionStore = defineStore('connection', {
   },
 
   actions: {
-    persist () {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.connections))
-      localStorage.setItem(ACTIVE_KEY, JSON.stringify(this.activeId))
-    },
-
     async login (url, params) {
       this.loginLoading = true
       try {
@@ -64,7 +47,6 @@ export const useConnectionStore = defineStore('connection', {
           this.activeId = conn.id
         }
 
-        this.persist()
         return { success: true }
       } catch (err) {
         const msg = err.response?.data?.message || err.response?.data?.hint || err.message
@@ -74,18 +56,8 @@ export const useConnectionStore = defineStore('connection', {
       }
     },
 
-    addTokenConnection (url, token, name) {
-      const cleanUrl = url.replace(/\/+$/, '')
-      const id = `${cleanUrl}_token_${Date.now()}`
-      const conn = { id, name: name || new URL(cleanUrl).host, url: cleanUrl, token, email: null }
-      this.connections.push(conn)
-      this.activeId = conn.id
-      this.persist()
-    },
-
     setActive (id) {
       this.activeId = id
-      this.persist()
     },
 
     removeConnection (id) {
@@ -93,7 +65,6 @@ export const useConnectionStore = defineStore('connection', {
       if (this.activeId === id) {
         this.activeId = this.connections[0]?.id || null
       }
-      this.persist()
     },
 
     logout () {
@@ -101,7 +72,6 @@ export const useConnectionStore = defineStore('connection', {
         this.active.token = null
       }
       this.activeId = null
-      this.persist()
     },
 
     initDefaults () {
@@ -116,9 +86,12 @@ export const useConnectionStore = defineStore('connection', {
             token: null,
             email: null
           })
-          this.persist()
         }
       }
     }
+  },
+
+  persist: {
+    pick: ['connections', 'activeId']
   }
 })

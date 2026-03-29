@@ -6,7 +6,6 @@ div.resource-tree
     placeholder="Filter..."
     class="q-mb-sm"
     clearable
-    size="sm"
   )
     template(v-slot:prepend)
       q-icon(name="search" size="xs")

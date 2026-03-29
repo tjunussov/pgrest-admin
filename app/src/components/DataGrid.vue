@@ -31,7 +31,6 @@
             dense outlined
             style="min-width: 130px; max-width: 160px"
             emit-value map-options
-            size="sm"
           )
           q-select(
             v-model="filterOp"
@@ -39,7 +38,6 @@
             dense outlined
             style="min-width: 90px; max-width: 110px"
             emit-value map-options
-            size="sm"
           )
           q-input(
             v-model="filterValue"
@@ -48,7 +46,6 @@
             style="min-width: 140px; max-width: 200px"
             @keyup.enter="addFilter"
             :disable="filterOp === 'is.null' || filterOp === 'is.true' || filterOp === 'is.false'"
-            size="sm"
           )
           q-btn(icon="add" color="primary" dense flat size="sm" @click="addFilter")
           q-btn(icon="clear_all" dense flat size="sm" @click="clearFilters" v-if="filters.length")

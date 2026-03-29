@@ -10,11 +10,11 @@ q-page.q-pa-none.column.full-height
       indicator-color="primary"
       class="text-grey-6"
     )
-      q-tab(v-for="tab in schema.tabs" :key="tab.id" :name="tab.id" no-caps)
+      q-tab.tab-item(v-for="tab in schema.tabs" :key="tab.id" :name="tab.id" no-caps)
         .row.items-center.no-wrap
           q-icon(:name="tab.type === 'sql' ? 'code' : 'table_chart'" size="14px" class="q-mr-xs")
           span.text-caption {{ tab.label }}
-          q-btn.q-ml-xs(flat round dense icon="close" size="8px" @click.stop="schema.closeTab(tab.id)")
+          q-btn.q-ml-xs.tab-close-btn(flat round dense icon="close" size="8px" @click.stop="schema.closeTab(tab.id)")
 
     q-btn(flat dense round icon="add" size="sm" @click="schema.openSqlTab()")
       q-tooltip New SQL tab
@@ -48,3 +48,13 @@ export default defineComponent({
   }
 })
 </script>
+
+<style lang="scss">
+.tab-close-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tab-item:hover .tab-close-btn {
+  opacity: 1;
+}
+</style>

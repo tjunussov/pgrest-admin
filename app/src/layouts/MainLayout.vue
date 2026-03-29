@@ -9,9 +9,9 @@ q-layout(view="hHh lpR fFf")
     bordered
   )
     .drawer-resize-handle(@mousedown="startResize")
-    q-scroll-area.fit
-      .column.q-pa-sm(style="min-height: 100%")
-        //- Connection section
+    .column.fit
+      //- Connection section (fixed top)
+      .col-auto.q-pa-sm.q-pb-none
         .row.items-center.q-mb-sm
           q-btn-dropdown.full-width(
             flat no-caps dense
@@ -36,15 +36,15 @@ q-layout(view="hHh lpR fFf")
                   q-item-section(avatar)
                     q-icon(name="logout" size="xs")
                   q-item-section Disconnect
+        q-separator
 
-        q-separator.q-mb-sm
-
-        //- Resource tree
-        .col
+      //- Resource tree (scrollable middle)
+      q-scroll-area.col
+        .q-pa-sm
           resource-tree(v-if="conn.active" @select="onResourceSelect" @select-new="onResourceSelectNew")
 
-        //- Version footer (pushed to bottom)
-        .text-caption.text-grey-7.text-center.q-mt-md PgRestAdmin v{{ version }}
+      //- Version (fixed bottom)
+      .col-auto.text-caption.text-grey-7.text-center.q-pa-xs PgRestAdmin v{{ version }}
 
   q-page-container
     router-view

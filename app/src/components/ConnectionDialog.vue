@@ -16,28 +16,53 @@ q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue
           label="PostgREST URL"
           dense outlined
           use-input
+          hide-selected
+          fill-input
           input-debounce="0"
           new-value-mode="add-unique"
+          @input-value="onUrlInput"
           @filter="onUrlFilter"
           :rules="[v => !!v || 'URL is required']"
         )
-        q-input(
-          v-model="form.email"
-          label="Email / Username"
-          dense outlined
-          autocomplete="username"
-          :rules="[v => !!v || 'Required']"
-        )
-        q-input(
-          v-model="form.pass"
-          label="Password"
-          :type="showPass ? 'text' : 'password'"
-          dense outlined
-          autocomplete="current-password"
-          :rules="[v => !!v || 'Required']"
-        )
-          template(v-slot:append)
-            q-icon(:name="showPass ? 'visibility_off' : 'visibility'" class="cursor-pointer" @click="showPass = !showPass")
+          template(v-slot:option="scope")
+            q-item(v-bind="scope.itemProps")
+              q-item-section
+                q-item-label {{ scope.opt }}
+              q-item-section(side)
+                q-btn(
+                  flat dense round
+                  icon="delete"
+                  size="xs"
+                  color="negative"
+                  @click.stop="removeUrl(scope.opt)"
+                )
+          template(v-slot:after)
+            q-btn(
+              flat dense round
+              icon="sync"
+              :loading="fetchingSpec"
+              @click="fetchLoginSpec"
+            )
+              q-tooltip Load login form
+
+        //- No login function found
+        .text-grey-6.text-caption(v-if="specLoaded && !loginParams.length")
+          | No rpc/login function found on this server
+
+        //- Dynamic login fields from swagger
+        template(v-if="loginParams.length")
+          template(v-for="param in loginParams" :key="param.name")
+            q-input(
+              v-model="formFields[param.name]"
+              :label="param.name + (param.required ? ' *' : '')"
+              :type="isSecretField(param.name) ? (showPass ? 'text' : 'password') : 'text'"
+              dense outlined
+              :autocomplete="fieldAutocomplete(param.name)"
+              :rules="param.required ? [v => !!v || param.name + ' is required'] : []"
+              :hint="param.format !== 'character varying' ? param.format : ''"
+            )
+              template(v-if="isSecretField(param.name)" v-slot:append)
+                q-icon(:name="showPass ? 'visibility_off' : 'visibility'" class="cursor-pointer" @click="showPass = !showPass")
 
         .text-negative.text-caption(v-if="loginError") {{ loginError }}
 
@@ -46,6 +71,7 @@ q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue
           label="Connect"
           color="primary"
           :loading="conn.loginLoading"
+          :disable="!loginParams.length"
           no-caps
           class="full-width"
         )
@@ -87,10 +113,13 @@ q-dialog(:model-value="modelValue" @update:model-value="$emit('update:modelValue
 </template>
 
 <script>
-import { defineComponent, ref, computed } from 'vue'
+import { defineComponent, ref, computed, watch } from 'vue'
+import { api } from 'src/boot/axios'
 import { useConnectionStore } from 'src/stores/connection'
 import { useSchemaStore } from 'src/stores/schema'
 import { Notify, copyToClipboard } from 'quasar'
+
+const SECRET_FIELDS = ['pass', 'password', 'secret', 'token']
 
 const EXEC_SQL = `CREATE OR REPLACE FUNCTION public.exec_sql(query text)
   RETURNS json AS $$
@@ -118,13 +147,15 @@ export default defineComponent({
     const schema = useSchemaStore()
     const showPass = ref(false)
     const loginError = ref('')
+    const fetchingSpec = ref(false)
+    const specLoaded = ref(false)
+    const loginParams = ref([])
+    const formFields = ref({})
 
     const defaultUrl = process.env.DEFAULT_API_URL || ''
 
     const form = ref({
-      url: defaultUrl,
-      email: '',
-      pass: ''
+      url: defaultUrl
     })
 
     const savedUrls = computed(() => {
@@ -137,6 +168,10 @@ export default defineComponent({
 
     const urlOptions = ref(savedUrls.value)
 
+    function onUrlInput (val) {
+      form.value.url = val
+    }
+
     function onUrlFilter (val, update) {
       update(() => {
         if (!val) {
@@ -148,9 +183,71 @@ export default defineComponent({
       })
     }
 
+    function removeUrl (url) {
+      const toRemove = conn.connections.filter(c => c.url === url)
+      toRemove.forEach(c => conn.removeConnection(c.id))
+      urlOptions.value = savedUrls.value
+    }
+
+    async function fetchLoginSpec () {
+      const url = form.value.url?.replace(/\/+$/, '')
+      if (!url) return
+
+      fetchingSpec.value = true
+      specLoaded.value = false
+      loginParams.value = []
+      formFields.value = {}
+
+      try {
+        const { data } = await api.get(`${url}/`)
+        const loginPath = data?.paths?.['/rpc/login']
+        const postSpec = loginPath?.post
+
+        if (postSpec?.parameters) {
+          const bodyParam = postSpec.parameters.find(p => p.in === 'body')
+          if (bodyParam?.schema?.properties) {
+            const props = bodyParam.schema.properties
+            const required = bodyParam.schema.required || []
+            loginParams.value = Object.keys(props).map(name => ({
+              name,
+              format: props[name].format || props[name].type || 'text',
+              required: required.includes(name)
+            }))
+          }
+        }
+
+        // Init form fields with empty values
+        loginParams.value.forEach(p => {
+          formFields.value[p.name] = ''
+        })
+
+        specLoaded.value = true
+
+        if (!loginParams.value.length) {
+          Notify.create({ type: 'warning', message: 'No rpc/login function found' })
+        }
+      } catch (err) {
+        Notify.create({ type: 'negative', message: `Failed to fetch spec: ${err.message}` })
+      } finally {
+        fetchingSpec.value = false
+      }
+    }
+
+    function isSecretField (name) {
+      return SECRET_FIELDS.includes(name.toLowerCase())
+    }
+
+    function fieldAutocomplete (name) {
+      const n = name.toLowerCase()
+      if (n === 'email' || n === 'username' || n === 'user') return 'username'
+      if (SECRET_FIELDS.includes(n)) return 'current-password'
+      return 'off'
+    }
+
     async function onLogin () {
       loginError.value = ''
-      const res = await conn.login(form.value.url, form.value.email, form.value.pass)
+      const url = form.value.url?.replace(/\/+$/, '')
+      const res = await conn.login(url, formFields.value)
       if (res.success) {
         emit('update:modelValue', false)
         schema.reset()
@@ -166,13 +263,29 @@ export default defineComponent({
         .then(() => Notify.create({ type: 'positive', message: 'Copied to clipboard' }))
     }
 
+    // Auto-fetch spec when dialog opens
+    watch(() => props.modelValue, (val) => {
+      if (val && form.value.url && !loginParams.value.length) {
+        fetchLoginSpec()
+      }
+    })
+
     return {
       conn,
       showPass,
       loginError,
+      fetchingSpec,
+      specLoaded,
+      loginParams,
+      formFields,
       form,
       urlOptions,
+      onUrlInput,
       onUrlFilter,
+      removeUrl,
+      fetchLoginSpec,
+      isSecretField,
+      fieldAutocomplete,
       onLogin,
       copySqlSnippet
     }

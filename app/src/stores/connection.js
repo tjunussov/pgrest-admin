@@ -42,19 +42,20 @@ export const useConnectionStore = defineStore('connection', {
       localStorage.setItem(ACTIVE_KEY, JSON.stringify(this.activeId))
     },
 
-    async login (url, email, pass, name) {
+    async login (url, params) {
       this.loginLoading = true
       try {
         const cleanUrl = url.replace(/\/+$/, '')
-        const { data } = await api.post(`${cleanUrl}/rpc/login`, { email, pass })
+        const { data } = await api.post(`${cleanUrl}/rpc/login`, params)
 
         const token = Array.isArray(data) ? data[0]?.token : data?.token || data?.[0]?.token
         if (!token) throw new Error('No token returned from login')
 
-        const id = `${cleanUrl}_${email}_${Date.now()}`
-        const conn = { id, name: name || `${email}@${new URL(cleanUrl).host}`, url: cleanUrl, token, email }
+        const label = params.email || params.username || params.user || Object.values(params)[0] || ''
+        const id = `${cleanUrl}_${label}_${Date.now()}`
+        const conn = { id, name: `${label}@${new URL(cleanUrl).host}`, url: cleanUrl, token, email: label }
 
-        const existing = this.connections.findIndex(c => c.url === cleanUrl && c.email === email)
+        const existing = this.connections.findIndex(c => c.url === cleanUrl && c.email === label)
         if (existing >= 0) {
           this.connections[existing] = { ...this.connections[existing], token, name: conn.name }
           this.activeId = this.connections[existing].id

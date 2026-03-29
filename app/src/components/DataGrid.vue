@@ -7,7 +7,7 @@
       :columns="tableColumns"
       :loading="loading"
       row-key="__rowIndex"
-      dense flat bordered
+      dense flat
       separator="cell"
       selection="single"
       v-model:selected="selected"
@@ -442,6 +442,9 @@ export default defineComponent({
   max-width: 300px;
 }
 .inline-editor {
-  border-top: 2px solid #1976d2;
+  border-top: 1px solid #333;
+}
+.inline-editor .q-field--outlined .q-field__control:before {
+  border-color: #333;
 }
 </style>

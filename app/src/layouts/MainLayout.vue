@@ -6,7 +6,7 @@ q-layout(view="hHh lpR fFf")
     :width="settings.drawerWidth"
     class="bg-dark"
     :breakpoint="0"
-    bordered
+    Zbordered
   )
     .drawer-resize-handle(@mousedown="startResize")
     q-scroll-area.fit

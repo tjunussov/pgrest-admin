@@ -1,7 +1,7 @@
 <template lang="pug">
 .data-grid.column.full-height
   //- Table section
-  .col(:class="{ 'col-shrink': !!selectedRow }" style="overflow: auto")
+  .col(style="overflow: auto")
     q-table(
       :rows="rows"
       :columns="tableColumns"
@@ -9,9 +9,6 @@
       row-key="__rowIndex"
       dense flat bordered
       separator="cell"
-      selection="single"
-      :selected="selected"
-      @update:selected="onSelect"
       :pagination="pagination"
       @request="onRequest"
       :rows-per-page-options="[25, 50, 100, 250]"
@@ -24,12 +21,12 @@
             span.text-subtitle2 {{ resource?.name }}
             q-badge.q-ml-sm(v-if="totalCount !== null" :label="`${totalCount} rows`" color="grey-8")
             q-space
-            q-btn(icon="add" color="positive" dense flat size="sm" @click="openCreate")
+            q-btn(icon="add" color="positive" dense flat size="sm" @click="newRow")
               q-tooltip Insert row
             q-btn(icon="refresh" dense flat size="sm" @click="fetchData" class="q-ml-xs")
             q-btn(icon="settings" dense flat size="sm" @click="showStructure = true" class="q-ml-xs")
               q-tooltip Structure
-            q-btn(icon="delete" dense flat size="sm" color="negative" @click="confirmDelete(selectedRow)" class="q-ml-xs" v-if="selectedRow")
+            q-btn(icon="delete" dense flat size="sm" color="negative" @click="confirmDelete" class="q-ml-xs" v-if="selectedRowIndex >= 0")
               q-tooltip Delete selected
 
           //- Inline filters
@@ -69,42 +66,45 @@
               | {{ f.column }} {{ f.op }} {{ f.value }}
 
       template(v-slot:body="props")
-        q-tr(:props="props" :class="{ 'bg-blue-grey-10': props.row.__rowIndex === selectedRow?.__rowIndex }" @click="onRowClick(props.row)" style="cursor: pointer")
-          q-td(auto-width)
-            q-checkbox(v-model="props.selected" dense)
+        q-tr(
+          :props="props"
+          :class="{ 'bg-blue-grey-10': props.row.__rowIndex === selectedRowIndex }"
+          @click="selectRow(props.row)"
+          style="cursor: pointer"
+        )
           q-td(v-for="col in props.cols" :key="col.name" :props="props")
             .cell-truncate {{ formatCell(col.value) }}
               q-tooltip(v-if="isLongValue(col.value)") {{ formatCell(col.value) }}
 
-  //- Inline editor panel
-  template(v-if="selectedRow")
-    q-separator
-    .inline-editor.bg-dark.q-pa-sm(style="flex-shrink: 0; max-height: 40vh; overflow-y: auto")
-      .row.items-center.q-mb-sm
-        q-icon(name="edit" size="xs" class="q-mr-xs" color="primary")
-        span.text-caption.text-bold {{ editMode === 'create' ? 'New Row' : resource?.name }}
-        q-space
-        q-btn(flat dense round icon="open_in_new" size="xs" @click="popOutToDialog")
-          q-tooltip Open in dialog
-        q-btn(flat dense round icon="save" size="xs" color="positive" @click="saveInline" :loading="saving")
-          q-tooltip Save
-        q-btn(flat dense round icon="close" size="xs" @click="clearSelection")
-      .row.q-col-gutter-sm
-        .col-12.col-sm-6.col-md-4(v-for="col in editableColumns" :key="col.column_name")
-          template(v-if="isJsonColumn(col)")
-            q-code(
-              v-model="inlineForm[col.column_name]"
-              :label="`${col.column_name} (${col.data_type})`"
-              :readonly="col.is_pk"
-              min-height="80px"
-            )
-          q-input(
-            v-else
+  //- Bottom editor panel (always visible)
+  q-separator
+  .inline-editor.bg-dark.q-pa-sm(style="flex-shrink: 0; max-height: 40vh; overflow-y: auto")
+    .row.items-center.q-mb-sm
+      q-icon(:name="editMode === 'create' ? 'add' : 'edit'" size="xs" class="q-mr-xs" color="primary")
+      span.text-caption.text-bold {{ editMode === 'create' ? 'New Row' : 'Edit Row' }}
+      q-space
+      q-btn(flat dense round icon="open_in_new" size="xs" @click="popOutToDialog" v-if="selectedRowIndex >= 0")
+        q-tooltip Open in dialog
+      q-btn(flat dense round icon="save" size="xs" color="positive" @click="saveInline" :loading="saving")
+        q-tooltip Save
+      q-btn(flat dense round icon="clear" size="xs" @click="newRow" v-if="selectedRowIndex >= 0")
+        q-tooltip Clear / New
+    .row.q-col-gutter-sm
+      .col-12.col-sm-6.col-md-4(v-for="col in editableColumns" :key="col.column_name")
+        template(v-if="isJsonColumn(col)")
+          q-code(
             v-model="inlineForm[col.column_name]"
             :label="`${col.column_name} (${col.data_type})`"
-            dense outlined
-            :disable="editMode === 'edit' && col.is_pk"
+            :readonly="editMode === 'edit' && col.is_pk"
+            min-height="80px"
           )
+        q-input(
+          v-else
+          v-model="inlineForm[col.column_name]"
+          :label="`${col.column_name} (${col.data_type})`"
+          dense outlined
+          :disable="editMode === 'edit' && col.is_pk"
+        )
 
   //- Structure dialog
   q-dialog(v-model="showStructure")
@@ -117,7 +117,7 @@
       q-card-section.q-pa-sm
         structure-tab
 
-  //- Dialog mode for editing
+  //- Dialog mode
   crud-dialog(
     v-model="showCrud"
     :mode="crudMode"
@@ -171,11 +171,10 @@ export default defineComponent({
     const showStructure = ref(false)
     const saving = ref(false)
 
-    // Selection & inline editor
-    const selected = ref([])
-    const selectedRow = ref(null)
+    // Selection
+    const selectedRowIndex = ref(-1)
     const inlineForm = ref({})
-    const editMode = ref('edit')
+    const editMode = ref('create')
 
     // Filters
     const filterColumn = ref(null)
@@ -219,9 +218,7 @@ export default defineComponent({
       }))
     })
 
-    function isJsonColumn (col) {
-      return JSON_TYPES.includes(col.data_type)
-    }
+    function isJsonColumn (col) { return JSON_TYPES.includes(col.data_type) }
 
     function stringify (val) {
       if (val === null || val === undefined) return ''
@@ -241,56 +238,36 @@ export default defineComponent({
       return String(value).length > 50
     }
 
-    function populateInlineForm (row) {
+    function populateForm (row) {
       const form = {}
       gridColumns.value.forEach(c => {
-        const v = row[c.column_name]
+        const v = row ? row[c.column_name] : null
         form[c.column_name] = isJsonColumn(c) ? stringify(v) : v
       })
       inlineForm.value = form
     }
 
-    function onSelect (val) {
-      selected.value = val
-      if (val.length) {
-        selectedRow.value = val[0]
-        editMode.value = 'edit'
-        populateInlineForm(val[0])
+    function selectRow (row) {
+      if (selectedRowIndex.value === row.__rowIndex) {
+        // Deselect → go to new row mode
+        newRow()
       } else {
-        selectedRow.value = null
-        inlineForm.value = {}
+        selectedRowIndex.value = row.__rowIndex
+        editMode.value = 'edit'
+        populateForm(row)
       }
     }
 
-    function onRowClick (row) {
-      if (selectedRow.value?.__rowIndex === row.__rowIndex) {
-        clearSelection()
-      } else {
-        selected.value = [row]
-        selectedRow.value = row
-        editMode.value = 'edit'
-        populateInlineForm(row)
-      }
-    }
-
-    function clearSelection () {
-      selected.value = []
-      selectedRow.value = null
-      inlineForm.value = {}
-    }
-
-    function openCreate () {
+    function newRow () {
+      selectedRowIndex.value = -1
       editMode.value = 'create'
-      selectedRow.value = { __new: true }
-      selected.value = []
-      const form = {}
-      editableColumns.value.forEach(c => { form[c.column_name] = null })
-      inlineForm.value = form
+      populateForm(null)
     }
 
     function popOutToDialog () {
-      crudMode.value = editMode.value
-      editingRow.value = editMode.value === 'edit' ? { ...selectedRow.value } : null
+      const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+      crudMode.value = 'edit'
+      editingRow.value = row ? { ...row } : null
       showCrud.value = true
     }
 
@@ -321,15 +298,17 @@ export default defineComponent({
           })
           Notify.create({ type: 'positive', message: 'Row inserted' })
         } else {
+          const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+          if (!row) return
           const pks = schema.getPrimaryKeys(resource.value.schema, name)
           const params = {}
-          pks.forEach(pk => { params[pk] = `eq.${selectedRow.value[pk]}` })
+          pks.forEach(pk => { params[pk] = `eq.${row[pk]}` })
           await api.patch(`${conn.baseUrl}/${name}`, payload, {
             params, headers: { ...conn.apiHeaders, Prefer: 'return=representation' }
           })
           Notify.create({ type: 'positive', message: 'Row updated' })
         }
-        clearSelection()
+        newRow()
         fetchData()
       } catch (err) {
         Notify.create({ type: 'negative', message: `Save failed: ${err.response?.data?.message || err.message}` })
@@ -401,8 +380,9 @@ export default defineComponent({
       fetchData()
     }
 
-    function confirmDelete (row) {
-      if (!row || row.__new) return
+    function confirmDelete () {
+      const row = rows.value.find(r => r.__rowIndex === selectedRowIndex.value)
+      if (!row) return
       $q.dialog({ title: 'Delete Row', message: 'Are you sure?', cancel: true, persistent: true, dark: true })
         .onOk(async () => {
           try {
@@ -411,7 +391,7 @@ export default defineComponent({
             pks.forEach(pk => { params[pk] = `eq.${row[pk]}` })
             await api.delete(`${conn.baseUrl}/${resource.value.name}`, { params, headers: conn.apiHeaders })
             $q.notify({ type: 'positive', message: 'Row deleted' })
-            clearSelection()
+            newRow()
             fetchData()
           } catch (err) {
             $q.notify({ type: 'negative', message: `Delete failed: ${err.message}` })
@@ -427,7 +407,7 @@ export default defineComponent({
         activeFilters.value = {}
         pagination.value.page = 1
         pagination.value.sortBy = null
-        clearSelection()
+        newRow()
         fetchData()
       }
     }, { immediate: true })
@@ -436,12 +416,12 @@ export default defineComponent({
       rows, loading, totalCount, pagination, resource, saving,
       gridColumns, tableColumns, editableColumns,
       showCrud, crudMode, editingRow, showStructure,
-      selected, selectedRow, inlineForm, editMode,
+      selectedRowIndex, inlineForm, editMode,
       filterColumn, filterOp, filterValue, filters, filterColumnOptions,
       operators,
       isJsonColumn, formatCell, isLongValue,
-      fetchData, onRequest, onSelect, onRowClick, clearSelection,
-      openCreate, popOutToDialog, saveInline,
+      fetchData, onRequest, selectRow, newRow,
+      popOutToDialog, saveInline,
       addFilter, removeFilter, clearFilters, confirmDelete
     }
   }

@@ -249,16 +249,25 @@ export default defineComponent({
       })
     }, { immediate: true })
 
-    // Restore tree state after schemas load
+    // When schemas load: fetch tables for all schemas, expand schema+tables nodes
     watch(() => schema.schemas, async (val) => {
       if (!val?.length) return
-      const res = schema.activeResource
-      if (res) {
-        // Ensure the schema's tables are loaded so tree can expand
-        if (!schema.tables[res.schema]) {
-          await schema.fetchTables(res.schema)
-          await schema.fetchFunctions()
+
+      // Fetch tables for all schemas and expand them
+      await Promise.all(val.map(async (s) => {
+        if (!schema.tables[s.schema_name]) {
+          await schema.fetchTables(s.schema_name)
         }
+        // Expand schema node and tables group
+        const schemaKey = `schema:${s.schema_name}`
+        const tablesKey = `tables:${s.schema_name}`
+        if (!expandedKeys.value.includes(schemaKey)) expandedKeys.value.push(schemaKey)
+        if (!expandedKeys.value.includes(tablesKey)) expandedKeys.value.push(tablesKey)
+      }))
+
+      // Also fetch functions once
+      if (!schema.functions.length) {
+        await schema.fetchFunctions()
       }
     })
 
